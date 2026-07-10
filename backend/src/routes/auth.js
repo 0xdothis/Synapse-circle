@@ -330,7 +330,7 @@ router.get("/me", authenticate, async (req, res, next) => {
       user: {
         ...user.toJSON(),
         trustedContactsCount: contactCount,
-        maxContacts: parseInt(process.env.MAX_TRUSTED_CONTACTS) || 3,
+        maxContacts: Number.parseInt(process.env.MAX_TRUSTED_CONTACTS) || 3,
       },
     });
   } catch (error) {
