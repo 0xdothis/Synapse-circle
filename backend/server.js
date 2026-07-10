@@ -95,8 +95,6 @@ app.use((req, res) => {
 // Global error handler
 app.use(errorHandler);
 
-// Keep a module-level reference so shutdown handlers can close the HTTP
-// server (not just the DB connection) before the process exits.
 let server;
 
 // Start server
@@ -142,8 +140,6 @@ process.on("uncaughtException", (err) => {
   }, 1000);
 });
 
-// Graceful shutdown, compatible with Mongoose 8+ (connection.close() is
-// promise-only and no longer accepts a callback).
 let isShuttingDown = false;
 
 const gracefulShutdown = async (signal) => {
@@ -187,6 +183,8 @@ const gracefulShutdown = async (signal) => {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-await startServer();
+if (process.env.NODE_ENV !== "test") {
+  await startServer();
+}
 
 export default app;

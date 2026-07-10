@@ -10,10 +10,33 @@ const validatePhoneNumber = (value) => {
 };
 
 const validateEmail = (value) => {
-  const emailRegex = /^\S+@\S+\.\S+$/;
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
   if (!emailRegex.test(value)) {
     throw new Error("Invalid email format");
   }
+  return true;
+};
+
+const validateEmailSecure = (value) => {
+  if (!value || typeof value !== "string") {
+    throw new Error("Invalid email format");
+  }
+
+  // Basic but safe validation
+  const parts = value.split("@");
+  if (parts.length !== 2) {
+    throw new Error("Invalid email format");
+  }
+
+  const [local, domain] = parts;
+  if (local.length === 0 || domain.length === 0) {
+    throw new Error("Invalid email format");
+  }
+
+  if (!domain.includes(".")) {
+    throw new Error("Invalid email format");
+  }
+
   return true;
 };
 
@@ -37,10 +60,11 @@ const authValidation = {
   ],
 
   verifyOTP: [
-    body("phoneNumber")
+    body("email")
       .notEmpty()
-      .withMessage("Phone number is required")
-      .custom(validatePhoneNumber),
+      .withMessage("Email is required")
+      .isEmail()
+      .withMessage("Please enter a valid email"),
     body("otpCode")
       .notEmpty()
       .withMessage("OTP code is required")
@@ -51,10 +75,11 @@ const authValidation = {
   ],
 
   resendOTP: [
-    body("phoneNumber")
+    body("email")
       .notEmpty()
-      .withMessage("Phone number is required")
-      .custom(validatePhoneNumber),
+      .withMessage("Email is required")
+      .isEmail()
+      .withMessage("Please enter a valid email"),
   ],
 };
 
@@ -72,7 +97,8 @@ const contactValidation = {
     body("email")
       .notEmpty()
       .withMessage("Email is required")
-      .custom(validateEmail),
+      .isEmail() // Use built-in validator instead of custom
+      .withMessage("Please enter a valid email address"),
     body("relationship")
       .notEmpty()
       .withMessage("Relationship is required")
@@ -86,7 +112,10 @@ const contactValidation = {
       .isLength({ max: 100 })
       .withMessage("Name cannot exceed 100 characters"),
     body("phoneNumber").optional().custom(validatePhoneNumber),
-    body("email").optional().custom(validateEmail),
+    body("email")
+      .optional()
+      .isEmail()
+      .withMessage("Please enter a valid email address"),
     body("relationship")
       .optional()
       .isIn(["parent", "sibling", "friend", "roommate", "partner", "other"])
@@ -135,9 +164,14 @@ const validate = (validations) => {
       message: error.msg,
     }));
 
+    // Surface the first field-level message as the top-level `message` so
+    // callers (and tests) that check for a specific reason like
+    // "Email is required" get something more useful than a generic
+    // "Validation failed". The full list of field errors is still returned
+    // in `errors` for clients that want to display all of them.
     return res.status(400).json({
       success: false,
-      message: "Validation failed",
+      message: formattedErrors[0]?.message || "Validation failed",
       errors: formattedErrors,
     });
   };

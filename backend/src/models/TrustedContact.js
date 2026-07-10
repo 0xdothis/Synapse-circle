@@ -49,17 +49,24 @@ const trustedContactSchema = new mongoose.Schema(
 
 // Composite index for user and contact
 trustedContactSchema.index({ userId: 1, phoneNumber: 1 }, { unique: true });
-
-// Middleware to enforce max 3 contacts per user
 trustedContactSchema.pre("save", async function (next) {
+  const isBecomingActive = this.isNew
+    ? this.isActive
+    : this.isModified("isActive") && this.isActive;
+
+  if (!isBecomingActive) {
+    return next();
+  }
+
   const count = await mongoose.model("TrustedContact").countDocuments({
     userId: this.userId,
     isActive: true,
+    _id: { $ne: this._id },
   });
 
   const MAX_CONTACTS = Number.parseInt(process.env.MAX_TRUSTED_CONTACTS) || 3;
 
-  if (this.isActive && count >= MAX_CONTACTS) {
+  if (count >= MAX_CONTACTS) {
     const error = new Error(
       `You can only have up to ${MAX_CONTACTS} trusted contacts`,
     );
@@ -71,7 +78,7 @@ trustedContactSchema.pre("save", async function (next) {
 
 // Method to safely return contact data
 trustedContactSchema.methods.toJSON = function () {
-  const contact = this.toObject();
+  const contact = this.toObject({ virtuals: true });
   delete contact.__v;
   return contact;
 };

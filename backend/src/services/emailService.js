@@ -1,9 +1,10 @@
 import brevo from "@getbrevo/brevo";
+import crypto from "node:crypto";
 import OTP from "../models/OTP.js";
 import User from "../models/User.js";
 import { logger } from "../utils/logger.js";
 
-class emailService {
+class EmailService {
   constructor() {
     // Initialize Brevo
     this.apiInstance = new brevo.TransactionalEmailsApi();
@@ -14,15 +15,13 @@ class emailService {
     this.fromEmail = process.env.BREVO_FROM_EMAIL;
   }
 
-  // ============================================
   // OTP METHODS
-  // ============================================
-
   /**
-   * Generate a random 6-digit OTP
+   * Generate a random 6-digit OTP using crypto for better security
    */
   generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100000, 999999);
+    return otp.toString();
   }
 
   /**
@@ -30,14 +29,17 @@ class emailService {
    */
   async sendOTP(email, phoneNumber, purpose = "signup") {
     try {
-      // Generate OTP
       const otpCode = this.generateOTP();
-
-      // Calculate expiry (10 minutes from now)
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-      // Save OTP to database
-      const otp = await OTP.create({
+      /**
+       * Create the OTP record up-front, before branching on test vs. live
+       *  sending. Previously this only happened inside the test branch,
+       * which meant the live (Brevo) branch referenced an `otp` variable
+       * that was never defined — a guaranteed ReferenceError the first time
+       *  a real email was sent in production.
+       */
+      await OTP.create({
         phoneNumber,
         email,
         otpCode,
@@ -45,6 +47,19 @@ class emailService {
         purpose,
         isUsed: false,
       });
+
+      if (
+        process.env.NODE_ENV === "test" &&
+        process.env.DISABLE_EMAIL_SENDING === "true"
+      ) {
+        console.log(`📧 [TEST] OTP for ${email}: ${otpCode}`);
+
+        return {
+          success: true,
+          message: "OTP sent successfully to your email",
+          development_otp: otpCode,
+        };
+      }
 
       // Send email via Brevo
       const sendSmtpEmail = new brevo.SendSmtpEmail();
@@ -131,7 +146,6 @@ class emailService {
       return {
         success: true,
         message: "OTP sent successfully via email",
-        otpId: otp._id,
         development_otp: otpCode,
       };
     } catch (error) {
@@ -141,13 +155,24 @@ class emailService {
   }
 
   /**
-   * Verify OTP
+   * Verify OTP using email
    */
-  async verifyOTP(phoneNumber, otpCode) {
+  async verifyOTP(email, otpCode) {
     try {
-      // Find valid OTP
+      /**
+       * Check the user exists FIRST. Previously this checked the OTP record
+       *  first, so a nonexistent email (no OTP record either) always threw
+       * "Invalid or expired OTP" and the route's 404 "User not found" branch was never reached.
+       */
+      const user = await User.findOne({ email });
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      // Find valid OTP by email
       const otp = await OTP.findOne({
-        phoneNumber,
+        email,
         otpCode,
         isUsed: false,
         expiresAt: { $gt: new Date() },
@@ -161,19 +186,10 @@ class emailService {
       otp.isUsed = true;
       await otp.save();
 
-      // Find or create user
-      let user = await User.findOne({ phoneNumber });
-
-      if (user) {
-        user.isVerified = true;
-        user.lastLogin = new Date();
-        await user.save();
-      } else {
-        user = await User.create({
-          phoneNumber,
-          isVerified: true,
-        });
-      }
+      // Mark user as verified
+      user.isVerified = true;
+      user.lastLogin = new Date();
+      await user.save();
 
       return {
         success: true,
@@ -190,17 +206,11 @@ class emailService {
    * Resend OTP via Email
    */
   async resendOTP(email, phoneNumber, purpose = "signup") {
-    // Invalidate old OTPs
     await OTP.updateMany({ phoneNumber, isUsed: false }, { isUsed: true });
-
-    // Send new OTP via email
     return this.sendOTP(email, phoneNumber, purpose);
   }
 
-  // ============================================
   // ALERT EMAIL METHODS
-  // ============================================
-
   /**
    * Generate location URL
    */
@@ -482,6 +492,17 @@ class emailService {
    * Send SOS alert email to a single recipient
    */
   async sendSOSAlert(alertData) {
+    if (
+      process.env.NODE_ENV === "test" &&
+      process.env.DISABLE_EMAIL_SENDING === "true"
+    ) {
+      const { contacts } = alertData;
+      return {
+        success: true,
+        messageId: "test-message-id",
+        recipients: contacts.map((c) => c.email),
+      };
+    }
     try {
       const { contacts, isCancelled = false, userName, userPhone } = alertData;
 
@@ -559,4 +580,4 @@ class emailService {
   }
 }
 
-export default new emailService();
+export default new EmailService();

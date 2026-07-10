@@ -17,7 +17,9 @@ class SOSService {
       // Get user details
       const user = await User.findById(userId);
       if (!user) {
-        throw new Error("User not found");
+        const error = new Error("User not found");
+        error.statusCode = 404;
+        throw error;
       }
 
       // Get trusted contacts
@@ -33,9 +35,11 @@ class SOSService {
 
       // Check if there are any recipients
       if (trustedContacts.length === 0 && securityContacts.length === 0) {
-        throw new Error(
+        const error = new Error(
           "No contacts available. Please add trusted contacts first.",
         );
+        error.statusCode = 400;
+        throw error;
       }
 
       // Generate location link
@@ -181,16 +185,24 @@ class SOSService {
       const alert = await SOSAlert.findOne({ _id: alertId, userId });
 
       if (!alert) {
-        throw new Error("Alert not found");
+        const error = new Error("Alert not found");
+        error.statusCode = 404;
+        throw error;
       }
 
       if (alert.status !== "sent") {
-        throw new Error(`Alert cannot be cancelled (status: ${alert.status})`);
+        const error = new Error(
+          `Alert cannot be cancelled (status: ${alert.status})`,
+        );
+        error.statusCode = 400;
+        throw error;
       }
 
       // Check cancellation window
       if (!alert.canCancel()) {
-        throw new Error("Cancellation window has passed (5 minutes)");
+        const error = new Error("Cancellation window has passed (5 minutes)");
+        error.statusCode = 400;
+        throw error;
       }
 
       // Update alert
@@ -304,7 +316,9 @@ class SOSService {
       const alert = await SOSAlert.findOne({ _id: alertId, userId });
 
       if (!alert) {
-        throw new Error("Alert not found");
+        const error = new Error("Alert not found");
+        error.statusCode = 404;
+        throw error;
       }
 
       return {

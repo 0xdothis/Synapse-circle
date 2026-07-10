@@ -1,6 +1,5 @@
 import express from "express";
 import jwt from "jsonwebtoken";
-
 import User from "../models/User.js";
 import TrustedContact from "../models/TrustedContact.js";
 import emailService from "../services/emailService.js";
@@ -15,7 +14,7 @@ const router = express.Router();
  * /api/auth/signup:
  *   post:
  *     summary: Send OTP for signup
- *     description: Sends a 6-digit OTP to the user's email for phone number verification
+ *     description: Creates a user and sends a 6-digit OTP to their email
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -37,19 +36,8 @@ const router = express.Router();
  *                 message:
  *                   type: string
  *                   example: OTP sent successfully to your email
- *                 otpId:
- *                   type: string
- *                   example: 507f1f77bcf86cd799439011
- *                 development_otp:
- *                   type: string
- *                   example: 123456
- *                   description: Only available in development mode
  *       400:
  *         description: Validation error or user already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many requests
  */
@@ -69,44 +57,54 @@ router.post(
         });
       }
 
-      // Check if user already exists with this email
+      // Check if this email is already tied to a DIFFERENT phone number.
       const existingEmail = await User.findOne({ email });
-      if (existingEmail?.isVerified) {
+      if (existingEmail && existingEmail.phoneNumber !== phoneNumber) {
         return res.status(400).json({
           success: false,
           message: "Email already registered. Please use a different email.",
         });
       }
 
-      // Check if user already exists with this phone number
+      // Check if this phone number is already tied to a DIFFERENT email
       const existingPhone = await User.findOne({ phoneNumber });
-      if (existingPhone?.isVerified) {
+      if (existingPhone && existingPhone.email !== email) {
         return res.status(400).json({
           success: false,
           message: "Phone number already registered. Please log in.",
         });
       }
 
-      // If user exists but not verified, update their info
+      // Find or create user
       let user = existingPhone || existingEmail;
+
       if (user && !user.isVerified) {
         user.name = name || user.name;
         user.email = email || user.email;
+        user.phoneNumber = phoneNumber || user.phoneNumber;
         await user.save();
+      } else if (!user) {
+        await User.create({
+          email,
+          phoneNumber,
+          name: name || "",
+          isVerified: false,
+        });
       }
 
       // Send OTP via email
       const result = await emailService.sendOTP(email, phoneNumber, "signup");
-
-      res.status(200).json({
+      const isDevelopment = process.env.NODE_ENV !== "production";
+      const response = {
         success: true,
-        message: "OTP sent successfully to your email",
-        otpId: result.otpId,
-        // Development only - shows OTP in console for testing
-        ...(process.env.NODE_ENV === "development" && {
-          development_otp: result.development_otp,
-        }),
-      });
+        message: result.message || "OTP sent successfully to your email",
+      };
+
+      if (isDevelopment && result.development_otp) {
+        response.development_otp = result.development_otp;
+      }
+
+      res.status(200).json(response);
     } catch (error) {
       next(error);
     }
@@ -118,14 +116,25 @@ router.post(
  * /api/auth/verify-otp:
  *   post:
  *     summary: Verify OTP and complete signup/login
- *     description: Verifies the OTP and returns a JWT token for authenticated access
+ *     description: Verifies the OTP sent to email and returns a JWT token
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/VerifyOTPRequest'
+ *             type: object
+ *             required:
+ *               - email
+ *               - otpCode
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: student@campus.edu
+ *               otpCode:
+ *                 type: string
+ *                 example: 123456
  *     responses:
  *       200:
  *         description: OTP verified successfully
@@ -135,12 +144,8 @@ router.post(
  *               $ref: '#/components/schemas/AuthResponse'
  *       400:
  *         description: Invalid or expired OTP
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       429:
- *         description: Too many attempts
+ *       404:
+ *         description: User not found
  */
 router.post(
   "/verify-otp",
@@ -148,14 +153,14 @@ router.post(
   validate(authValidation.verifyOTP),
   async (req, res, next) => {
     try {
-      const { phoneNumber, otpCode } = req.body;
+      const { email, otpCode } = req.body;
 
-      // Verify OTP
-      const result = await emailService.verifyOTP(phoneNumber, otpCode);
+      // Verify OTP using email
+      const result = await emailService.verifyOTP(email, otpCode);
 
       // Generate JWT token
       const token = jwt.sign(
-        { userId: result.user._id, phoneNumber: result.user.phoneNumber },
+        { userId: result.user._id, email: result.user.email },
         process.env.JWT_SECRET,
         { expiresIn: process.env.JWT_EXPIRE || "7d" },
       );
@@ -177,6 +182,19 @@ router.post(
         },
       });
     } catch (error) {
+      // Handle known errors gracefully
+      if (error.message === "Invalid or expired OTP") {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      if (error.message === "User not found") {
+        return res.status(404).json({
+          success: false,
+          message: "User not found. Please sign up first.",
+        });
+      }
       next(error);
     }
   },
@@ -196,11 +214,12 @@ router.post(
  *           schema:
  *             type: object
  *             required:
- *               - phoneNumber
+ *               - email
  *             properties:
- *               phoneNumber:
+ *               email:
  *                 type: string
- *                 example: +1234567890
+ *                 format: email
+ *                 example: student@campus.edu
  *     responses:
  *       200:
  *         description: OTP resent successfully
@@ -213,10 +232,8 @@ router.post(
  *                   type: boolean
  *                 message:
  *                   type: string
- *                 otpId:
- *                   type: string
  *       404:
- *         description: Phone number not found
+ *         description: Email not found
  *       429:
  *         description: Too many requests
  */
@@ -226,36 +243,29 @@ router.post(
   validate(authValidation.resendOTP),
   async (req, res, next) => {
     try {
-      const { phoneNumber } = req.body;
+      const { email } = req.body;
 
-      // Check if user exists
-      const user = await User.findOne({ phoneNumber });
+      const user = await User.findOne({ email });
       if (!user) {
         return res.status(404).json({
           success: false,
-          message: "Phone number not found. Please sign up first.",
+          message: "Email not found. Please sign up first.",
         });
       }
 
-      // Check if user has email
-      if (!user.email) {
-        return res.status(400).json({
-          success: false,
-          message: "No email found for this user. Please sign up again.",
-        });
-      }
+      const result = await emailService.resendOTP(email, user.phoneNumber);
+      const isDevelopment = process.env.NODE_ENV !== "production";
 
-      const result = await emailService.resendOTP(user.email, phoneNumber);
-
-      res.status(200).json({
+      const response = {
         success: true,
         message: "OTP resent successfully to your email",
-        otpId: result.otpId,
-        // Development only
-        ...(process.env.NODE_ENV === "development" && {
-          development_otp: result.development_otp,
-        }),
-      });
+      };
+
+      if (isDevelopment && result.development_otp) {
+        response.development_otp = result.development_otp;
+      }
+
+      res.status(200).json(response);
     } catch (error) {
       next(error);
     }
@@ -274,19 +284,6 @@ router.post(
  *     responses:
  *       200:
  *         description: Logged out successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Logged out successfully
- *       401:
- *         description: Unauthorized - No token provided
  */
 router.post("/logout", authenticate, async (req, res) => {
   res.status(200).json({
@@ -314,17 +311,15 @@ router.post("/logout", authenticate, async (req, res) => {
  *               properties:
  *                 success:
  *                   type: boolean
- *                   example: true
  *                 user:
  *                   $ref: '#/components/schemas/User'
  *       401:
- *         description: Unauthorized - Invalid or expired token
+ *         description: Unauthorized
  */
 router.get("/me", authenticate, async (req, res, next) => {
   try {
     const user = await User.findById(req.userId).select("-__v");
 
-    // Get contact count
     const contactCount = await TrustedContact.countDocuments({
       userId: req.userId,
       isActive: true,
@@ -335,7 +330,7 @@ router.get("/me", authenticate, async (req, res, next) => {
       user: {
         ...user.toJSON(),
         trustedContactsCount: contactCount,
-        maxContacts: Number.parseInt(process.env.MAX_TRUSTED_CONTACTS) || 3,
+        maxContacts: parseInt(process.env.MAX_TRUSTED_CONTACTS) || 3,
       },
     });
   } catch (error) {

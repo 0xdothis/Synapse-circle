@@ -206,6 +206,12 @@ const options = {
               type: "string",
               example: "OTP verified successfully",
             },
+            development_otp: {
+              type: "string",
+              example: "123456",
+              description:
+                "⚠️ ONLY AVAILABLE IN DEVELOPMENT/TEST ENVIRONMENTS. Never exposed in production.",
+            },
             token: {
               type: "string",
               example: "eyJhbGciOiJIUzI1NiIs...",
