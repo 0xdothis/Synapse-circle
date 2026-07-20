@@ -1,4 +1,4 @@
-import safewalk from "../assets/safewalk-light.svg"
+import safewalk from "../../assets/safewalk-light.svg"
 
 function Logo() {
   return (

@@ -25,9 +25,9 @@ function SignupPage() {
           <p className="text-neutral-700">Stay connected with trusted contacts and campus security.</p>
         </div>
         <div className="flex flex-col w-full space-y-4">
-          <Link to="signup/google" variant="outline" size="sm">Continue with Google</Link>
+          <Link to="google" variant="outline" size="sm">Continue with Google</Link>
           <small className="text-center text-xs text-neutral-400">OR</small>
-          <Link to="email" variant="secondary" size="sm">Continue with Email</Link>
+          <Link to="/auth/login" variant="secondary" size="sm">Continue with Email</Link>
         </div>
         <Terms />
       </div>

@@ -32,6 +32,7 @@ const buttonVariants = cva(
 
 interface ButtonProps extends Omit<ComponentPropsWithRef<"a">, "href">, VariantProps<typeof buttonVariants> { to: string; }
 
+
 function Link({ variant, size, className, to, children, ref, ...props }: ButtonProps) {
   return (
     <Tag to={to} ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props}>{children}</Tag>
