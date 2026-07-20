@@ -7,13 +7,14 @@ interface Props {
   heading: string;
   description: string;
   className?: string;
-  children: React.ReactNode
+  children: React.ReactNode,
+  id: string
 }
 
-function Segment({ title, heading, className, description, children }: Props) {
+function Segment({ id, title, heading, className, description, children }: Props) {
 
   return (
-    <section className={cn("mt-14", className)}>
+    <section id={id} className={cn("mt-14 scroll-mt-20", className)}>
       <div className="flex flex-col justify-center items-center text-center space-y-3">
         <Pill text={title} />
         <h3 className="text-2xl font-bold text-neutral-900">{heading}</h3>
