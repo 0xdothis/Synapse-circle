@@ -2,9 +2,10 @@ import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/utils/index"
-import { Button } from "@/components/ui/button"
+import Button from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import type { InputProps } from "@/components/ui/input"
 
 function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   return (
@@ -118,7 +119,7 @@ function InputGroupInput({
   className,
   type,
   ...props
-}: React.ComponentProps<"input">) {
+}: InputProps) {  // ← use your custom InputProps here, not React.ComponentProps<"input">
   return (
     <Input
       type={type}
@@ -131,7 +132,6 @@ function InputGroupInput({
     />
   )
 }
-
 function InputGroupTextarea({
   className,
   ...props
