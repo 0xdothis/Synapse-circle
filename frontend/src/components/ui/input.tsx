@@ -21,7 +21,7 @@ const inputVariants = cva(
 )
 
 
-interface InputProps
+export interface InputProps
   extends Omit<React.ComponentProps<"input">, "size">,
   VariantProps<typeof inputVariants> {
   startIcon?: IconSvgElement
