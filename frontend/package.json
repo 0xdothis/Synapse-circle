@@ -19,6 +19,7 @@
     "dom": "^0.0.3",
     "framer-motion": "^12.42.2",
     "input-otp": "^1.4.2",
+    "mixpanel-browser": "^2.81.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router": "^8.2.0",

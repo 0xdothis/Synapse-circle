@@ -16,7 +16,7 @@ function SignupPage() {
       </Button>
 
       <div>
-        <img src={ladyMobile} className="w-full" />
+        <img src={ladyMobile} alt="a lady in school holding a mobile device" className="w-full" />
       </div>
 
       <div className="w-full flex flex-col items-center text-center space-y-4">
