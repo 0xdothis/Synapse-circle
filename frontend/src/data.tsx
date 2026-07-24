@@ -27,7 +27,7 @@ export const features: dataType[] = [
    {
       icon: <HugeiconsIcon icon={UserGroupIcon} size={24} color="#0D7377" />,
       title: "Trusted contacts",
-      description: "Up to three people who matter are notified at once via SMS and push."
+      description: "Up to three people who matter are notified at once via email and push."
    },
    {
       icon: <HugeiconsIcon icon={CallIcon} size={24} color="#0D7377" />,

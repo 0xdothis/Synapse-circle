@@ -9,15 +9,31 @@ import {
   FieldLabel,
   FieldSet
 } from "@/components/ui/field"
-import { useNavigate } from "react-router"
-
+import { useLocation, useNavigate } from "react-router"
+import React from "react"
+import Link from "@/components/ui/Link"
 
 function SignUpVerification() {
+  const location = useLocation()
+  const [otp, setOTP] = React.useState("")
+
+  let email = location.state?.email;
+  let maskedEmail: string = "";
+
+  if (email) {
+    const [name, domain] = email.split('@');
+    const maskedName = name[0] + name[1] + '*'.repeat(name.length - 2);
+    maskedEmail = `${maskedName}@${domain}`
+
+  }
+
+
+
 
   return (
     <section className="pt-5 flex-1 flex flex-col">
-      <BareBone heading="Verify your email" description="Enter the 6-digit code we sent to t***@gmail.com" icon={Mail01Icon} cta="Continue" resend={{ desc: "Didn't get a code? ", anchor: "Resend" }} changeEmail="Change Email Address" to="/auth/verified">
-        <InputOTP maxLength={6} >
+      <BareBone heading="Verify your email" description={`Enter the 6-digit code we sent to ${maskedEmail}`} icon={Mail01Icon} cta="Continue" resend={{ desc: "Didn't get a code? ", anchor: "Resend" }} changeEmail="Change Email Address" to="/auth/verified" otp={otp} email={email} setOTP={setOTP}>
+        <InputOTP maxLength={6} value={otp} onChange={(otp) => setOTP(otp)}>
           <InputOTPGroup>
             <InputOTPSlot index={0} />
             <InputOTPSlot index={1} />
@@ -29,7 +45,7 @@ function SignUpVerification() {
         </InputOTP>
 
       </BareBone>
-    </section>
+    </section >
 
   )
 }
@@ -39,8 +55,9 @@ function SignUpVerified() {
 
   return (
     <section className="pt-5 flex flex-col flex-1 lg:pb-5">
-      <BareBone heading="Email verified!" description="Your email has been verified. Let's set up your safety profile." icon={MailCheck} cta="Continue to setup" to="/onboarding"  >
+      <BareBone heading="Email verified!" description="Your email has been verified. Let's set up your safety profile." icon={MailCheck}  >
       </BareBone>
+      <Link to="/onboarding">Continue to setup</Link>
 
     </section>
 

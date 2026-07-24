@@ -10,15 +10,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import Logo from "./navigation/Logo"
+import { cn } from "@/utils";
 
-export function PrivacyPolicy() {
+export function PrivacyPolicy({ className, text = "Privacy" }: { className?: string; text?: string }) {
   return (
     <Dialog>
-      <DialogTrigger render={<a>Privacy</a>} />
+      <DialogTrigger nativeButton={false} render={<a className={cn(className)}>{text}</a>} />
       <DialogContent className="lg:min-w-4xl md:min-w-2xl">
         <DialogHeader className="items-center">
           <Logo />
-          <DialogTitle className="lg:text-3xl font-bold pt-4">Privacy Policy</DialogTitle>
+          <DialogTitle className="lg:text-3xl font-bold pt-4">{text}</DialogTitle>
           <DialogDescription>
             Last updated: 21/07/2026
           </DialogDescription>

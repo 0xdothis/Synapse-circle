@@ -12,12 +12,27 @@ import {
 import { Field, FieldSet, FieldGroup, FieldLabel } from "@/components/ui/field"
 import React from "react"
 
-const frameworks = [
-  "Next.js",
-  "SvelteKit",
-  "Nuxt.js",
-  "Remix",
-  "Astro",
+const schools = [
+  "University of Ibadan",
+  "University of Lagos",
+  "Ahmadu Bello University",
+  "University of Nigeria, Nsukka",
+  "Obafemi Awolowo University",
+  "Covenant University",
+  "Federal University of Technology, Minna",
+  "University of Ilorin",
+  "University of Benin",
+  "University of Port Harcourt",
+  "Lagos State University",
+  "Nnamdi Azikiwe University",
+  "Bayero University Kano",
+  "Federal University of Technology, Akure",
+  "University of Abuja",
+  "Afe Babalola University",
+  "Babcock University",
+  "Federal University of Agriculture, Abeokuta",
+  "Ladoke Akintola University of Technology",
+  "University of Jos"
 ] as const
 
 function SchoolForm() {
@@ -50,7 +65,7 @@ function SchoolForm() {
               <Field>
                 <FieldLabel htmlFor="institution">Institution <small className="text-error text-sm">*</small></FieldLabel>
 
-                <Combobox items={frameworks} id="institution" onValueChange={handleChangeInstitution} required>
+                <Combobox items={schools} id="institution" onValueChange={handleChangeInstitution} required>
                   <ComboboxInput placeholder="Select a institution" data-valid={touched && institution !== null}
                     data-invalid={touched && institution === null} required />
                   <ComboboxContent>
