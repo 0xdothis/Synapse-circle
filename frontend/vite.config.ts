@@ -11,6 +11,16 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src")
     } 
   },
+  server: {
+    proxy: {
+      // Redirects local requests starting with /api to your Render backend
+      '/api': {
+        target: 'https://synap-circle-onrender.com',
+        changeOrigin: true,
+        secure: true,
+      }
+    }
+  }
   
 
 })
