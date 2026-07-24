@@ -1,6 +1,6 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ComponentPropsWithoutRef } from 'react';
-import { cn } from '@/utils';
+import { cn } from '@/utils/index';
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center font-semibold transition-all duration-200 ease-in-out", {

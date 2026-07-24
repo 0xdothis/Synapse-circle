@@ -1,10 +1,13 @@
-import safewalk from "../../assets/safewalk-light.svg"
+import safewalk from "../../assets/safewalk_light.png"
 
 function Logo() {
   return (
-    <div className="flex gap-4 items-center">
-      <img src={safewalk} className=" h-full" />
-      <h1 className="text-primary font-black text-xl">SafeWalk Campus </h1>
+    <div className="h-8">
+
+      <a className="flex h-full items-center gap-4" href="/">
+        <img src={safewalk} alt="safewalk shield" className="h-full" />
+        <h1 className="text-primary font-black text-xl">SafeWalk Campus </h1>
+      </a>
     </div>
   )
 }

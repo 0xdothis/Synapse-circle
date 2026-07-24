@@ -74,27 +74,27 @@ export const FAQs: FAQType[] = [
    {
       value: "item-1",
       question: "How does SafeWalk Campus work?",
-      answer: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut magna id enim varius porttitor. Nullam volutpat leo in risus sollicitudin, vitae vestibulum tortor viverra. Sed porttitor mi in nulla pulvinar auctor vel at justo. Proin at posuere mi. Donec gravida vitae risus eu vulputate. Duis tempor augue non odio consectetur, sit amet porttitor justo viverra. Ut quis lectus est."
+      answer: "When you trigger an SOS, SafeWalk Campus immediately alerts your trusted contacts and campus security with your live location. Location sharing continues until you mark yourself as safe, helping responders reach you as quickly as possible."
    },
    {
       value: "item-2",
       question: "Who receives my SOS alert?",
-      answer: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut magna id enim varius porttitor. Nullam volutpat leo in risus sollicitudin, vitae vestibulum tortor viverra. Sed porttitor mi in nulla pulvinar auctor vel at justo. Proin at posuere mi. Donec gravida vitae risus eu vulputate. Duis tempor augue non odio consectetur, sit amet porttitor justo viverra. Ut quis lectus est."
+      answer: "Your SOS alert is sent to your selected trusted contacts and your campus security team. They receive your live location so they can respond or assist immediately."
    },
    {
       value: "item-3",
       question: "How fast is an SOS alert sent?",
-      answer: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut magna id enim varius porttitor. Nullam volutpat leo in risus sollicitudin, vitae vestibulum tortor viverra. Sed porttitor mi in nulla pulvinar auctor vel at justo. Proin at posuere mi. Donec gravida vitae risus eu vulputate. Duis tempor augue non odio consectetur, sit amet porttitor justo viverra. Ut quis lectus est."
+      answer: "Alerts are sent almost instantly after the confirmation countdown ends. This short countdown helps prevent accidental activations while ensuring emergencies are reported quickly."
    },
    {
       value: "item-4",
       question: "Is my location tracked all the time?",
-      answer: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut magna id enim varius porttitor. Nullam volutpat leo in risus sollicitudin, vitae vestibulum tortor viverra. Sed porttitor mi in nulla pulvinar auctor vel at justo. Proin at posuere mi. Donec gravida vitae risus eu vulputate. Duis tempor augue non odio consectetur, sit amet porttitor justo viverra. Ut quis lectus est."
+      answer: "No. SafeWalk Campus only accesses and shares your location when you activate an SOS or when you've explicitly granted permission for emergency location sharing. Your location is not continuously monitored in the background."
    },
    {
       value: "item-5",
       question: "What happens if I trigger it by accident?",
-      answer: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec ut magna id enim varius porttitor. Nullam volutpat leo in risus sollicitudin, vitae vestibulum tortor viverra. Sed porttitor mi in nulla pulvinar auctor vel at justo. Proin at posuere mi. Donec gravida vitae risus eu vulputate. Duis tempor augue non odio consectetur, sit amet porttitor justo viverra. Ut quis lectus est."
+      answer: "If you activate SOS by mistake, you can cancel it during the countdown before the alert is sent. If the alert has already been sent, you can end the SOS once you're safe, which notifies your trusted contacts and campus security that the emergency has ended."
    },
 
 ]

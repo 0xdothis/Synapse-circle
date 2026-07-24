@@ -12,27 +12,68 @@ const SignUpVerified = lazy(() => import("./components/signup/Verification").the
 
 const Signup = lazy(() => import("./components/auth/signup"));
 const Signin = lazy(() => import("./components/auth/login"));
-import Loader from "@/components/Loader"
+const Start = lazy(() => import("./components/onboarding/start"))
+import { FullSpinner } from "@/components/Loader"
+import OnboardingLayout from "./layouts/OnboardingLayout";
+import Loader from "./components/Loader"
+import ErrorPage from "./pages/error";
+import RegistrationLayout from "./layouts/RegistrationLayout";
+const Welcome = lazy(() => import("./pages/onboarding/Welcome"));
+const Contact = lazy(() => import("./pages/onboarding/Contact"));
+const SchoolInfo = lazy(() => import("./pages/onboarding/SchoolInfo"));
+const Location = lazy(() => import("./pages/onboarding/Location"))
+const ContactForm = lazy(() => import("./pages/onboarding/ContactForm"))
+const SchoolForm = lazy(() => import("./pages/onboarding/SchoolForm"))
+
+
+
 
 
 
 
 export const router = createBrowserRouter([
   {
-    path: "/",
+
     element: <RootLayout />,
+    errorElement: <ErrorPage />,
     children: [
       { index: true, element: <Suspense fallback={<Loader />}><Homepage /></Suspense> },
-      { path: "/signup", element: <Suspense fallback={<Loader />} ><SignupPage /></Suspense> },
-      { path: "/auth/signup", element: <Suspense fallback={<Loader />}><Signup /></Suspense> },
-      { path: "/login", element: <Suspense fallback={<Loader />}><Signin /></Suspense> },
-      { path: "/auth/reset-password", element: <Suspense fallback={<Loader />}><ForgotPassword /></Suspense> },
-      { path: "/auth/reset-check", element: <Suspense fallback={<Loader />}><CheckYourEmail /></Suspense> },
-      {
-        path: "/auth/verification", element: <Suspense fallback={<Loader />} ><SignUpVerification /></Suspense>
-      },
-      { path: "/auth/verified", element: <Suspense fallback={<Loader />}><SignUpVerified /></Suspense> },
-      { path: "/auth/reset-email", element: <Suspense fallback={<Loader />}><ChangeEmail /></Suspense> }
+      { path: "auth/onboarding", element: <Suspense fallback={<FullSpinner />}><Start /></Suspense > }
     ]
+  },
+  {
+
+    element: <RegistrationLayout />,
+    children: [
+      { path: "signup", element: <Suspense fallback={<FullSpinner />} ><SignupPage /></Suspense> },
+      { path: "auth/login", element: <Suspense fallback={<FullSpinner />}><Signin /></Suspense> },
+      { path: "auth/signup", element: <Suspense fallback={<FullSpinner />}><Signup /></Suspense> },
+      { path: "auth/reset-password", element: <Suspense fallback={<FullSpinner />}><ForgotPassword /></Suspense> },
+      { path: "auth/reset-check", element: <Suspense fallback={<FullSpinner />}><CheckYourEmail /></Suspense> },
+      {
+        path: "auth/verification", element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
+      },
+      { path: "auth/verified", element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
+      { path: "auth/reset-email", element: <Suspense fallback={<FullSpinner />}><ChangeEmail /></Suspense> },
+
+
+
+
+    ]
+  },
+  {
+    path: "/onboarding",
+    element: <OnboardingLayout />,
+    children: [
+      { index: true, element: <Suspense fallback={<FullSpinner />}><Welcome /></Suspense> },
+      { path: "location", element: <Suspense fallback={<FullSpinner />}><Location /></Suspense> },
+      { path: "trusted-contact", element: <Suspense fallback={<FullSpinner />}><Contact /></Suspense> },
+      { path: "contact-form", element: <Suspense fallback={<FullSpinner />}><ContactForm /></Suspense> },
+      { path: "school-info", element: <Suspense fallback={<FullSpinner />}><SchoolInfo /></Suspense> },
+      { path: "school-form", element: <Suspense fallback={<FullSpinner />}><SchoolForm /></Suspense> }
+
+
+    ]
+
   }
 ])
