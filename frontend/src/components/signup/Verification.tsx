@@ -38,8 +38,8 @@ function SignUpVerification() {
 function SignUpVerified() {
 
   return (
-    <section className="pt-5 flex flex-col flex-1">
-      <BareBone heading="Email verified!" description="Your email has been verified. Let's set up your safety profile." icon={MailCheck} cta="Continue to setup" to="/auth/login"  >
+    <section className="pt-5 flex flex-col flex-1 lg:pb-5">
+      <BareBone heading="Email verified!" description="Your email has been verified. Let's set up your safety profile." icon={MailCheck} cta="Continue to setup" to="/onboarding"  >
       </BareBone>
 
     </section>
@@ -50,7 +50,7 @@ function SignUpVerified() {
 function ChangeEmail() {
 
   return (
-    <section className="pt-5 flex flex-col flex-1">
+    <section className="pt-5 flex flex-col flex-1 lg:pb-5">
       <BareBone heading="Change Email" description="Update your login email address and notification preferences." icon={Mail01Icon} cta="Update Email" >
 
         <form className=" flex flex-col space-y-14 w-full items-center">
@@ -83,7 +83,7 @@ function ChangeEmail() {
 
 function ForgotPassword() {
   return (
-    <section className="pt-5 flex flex-col flex-1 relative">
+    <section className="pt-5 flex flex-col flex-1 relative lg:pb-5">
       <BareBone heading="Forgot Password?" description="Enter the email address associated with your account and we'll send you a password reset code." icon={ForgotPasswordIcon} cta="Send Reset Link" to="/auth/reset-check">
 
         <form className="flex flex-col space-y-14 w-full absolute bottom-1/4">
@@ -107,7 +107,7 @@ function CheckYourEmail() {
   const navigate = useNavigate();
 
   return (
-    <section className="pt-5 flex flex-col flex-1 relative items-center">
+    <section className="pt-5 flex flex-col flex-1 relative items-center lg:pb-5">
       <BareBone heading="Check Your Email" description="You'll receive password reset instructions if an account is associated with this email address." icon={Mail01Icon} cta="Back to Login" to="/auth/login">
       </BareBone>
       <div className="absolute bottom-1/12 text-sm text-brand-500 font-semibold">

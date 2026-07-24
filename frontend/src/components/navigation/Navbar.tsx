@@ -30,8 +30,8 @@ function NavBar() {
   };
 
   return (
-    <header className="fixed inset-x-0 p-4 top-0 z-50 transition-all duration-300 bg-linear-to-b from-brand-100 to-neutral-50">
-      <div className="flex justify-between items-center">
+    <header className="fixed inset-x-0 py-4 top-0 z-50 transition-all duration-300 bg-linear-to-b from-brand-100 to-neutral-50">
+      <div className="max-w-360 px-4 flex mx-auto justify-between items-center">
         <Logo />
         <DesktopNav />
 

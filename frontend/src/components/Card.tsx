@@ -11,7 +11,7 @@ type ClassnameType = {
 function Card({ data, className }: ClassnameType) {
 
   return (
-    <div className={cn("space-y-4", className)}>
+    <div className={cn("space-y-4 lg:grid", className)}>
       {data?.map(({ icon, title, description }, index) => <CardItem key={index} children={icon} title={title} description={description} />
       )}
     </div>
