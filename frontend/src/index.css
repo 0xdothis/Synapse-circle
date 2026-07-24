@@ -1,4 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:ital,wght@0,100..900;1,100..900&display=swap');
+@font-face {
+    font-family: 'Geist';
+    /* Note: Update this path relative to where this CSS file sits */
+    src: url('./assets/fonts/geist.woff2') format('woff2');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
 @import "tailwindcss";
 @import "tw-animate-css";
 
