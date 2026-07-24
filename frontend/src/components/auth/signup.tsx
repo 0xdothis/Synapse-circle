@@ -63,24 +63,27 @@ function Signup() {
     const data = await res.json();
     const token = await tokenReq.json();
 
-    console.log(data)
-
-    if (data.success) {
+    if (!data.success) {
 
       setState("idle")
 
-      setUserInfo({ name: "", password: "", email: "", confirm_password: "", phoneNumber: "", terms: false })
-
-      setToken(token?.csrfToken)
-      trackEvent("signup_completed");
-
-      navigate("/auth/verify-email", {
-        state: {
-          email: userData.email
-        }
-      })
+      alert(`${data.message}`)
 
     }
+
+    setState("idle")
+
+    setUserInfo({ name: "", password: "", email: "", confirm_password: "", phoneNumber: "", terms: false })
+
+    setToken(token?.csrfToken)
+    trackEvent("signup_completed");
+
+    navigate("/auth/verify-email", {
+      state: {
+        email: userData.email
+      }
+    })
+
 
   }
 
