@@ -5,6 +5,7 @@ import Button from "@/components/ui/button"
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons";
 import { cn } from "@/utils";
 import { getToken } from "@/lib/authStorage";
+import Loader from "@/components/Loader"
 
 
 interface BareBoneProps {
@@ -22,14 +23,14 @@ interface BareBoneProps {
   email?: string;
 }
 
-const URL = import.meta.env.VITE_BACKEND_URL;
-
 
 function BareBone({ icon, heading, description, email, cta, className, otp, setOTP, resend, changeEmail, children }: BareBoneProps) {
   const navigate = useNavigate()
+  const [state, setState] = React.useState<"idle" | "loading" | "success">("idle")
 
 
   const handleOTP: React.MouseEventHandler<HTMLButtonElement> = async () => {
+    setState("loading")
     if (typeof setOTP !== "function") {
       return
     }
@@ -43,7 +44,7 @@ function BareBone({ icon, heading, description, email, cta, className, otp, setO
       return;
     }
 
-    const data = await fetch(`${URL}/auth/verify-otp`, {
+    const data = await fetch(`https://synap-circle.onrender.com/api/auth/verify-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -57,17 +58,24 @@ function BareBone({ icon, heading, description, email, cta, className, otp, setO
 
     const res = await data.json()
 
-    console.log(res)
 
     if (!res.success) {
       alert("Something went wrong")
+
+      setState("idle")
 
       return;
 
     }
 
+    setState("idle")
+
     navigate("/auth/verified")
 
+  }
+
+  if (state === "loading") {
+    return <Loader heading="Verfying your OTP" description="This will only take a while" />
   }
 
   return (
@@ -97,17 +105,18 @@ function BareBone({ icon, heading, description, email, cta, className, otp, setO
 
 function BareBoneFooter({ cta, resend, email, changeEmail, handleOTP, className }: { cta?: string; resend?: { desc: string; anchor: string; }; changeEmail?: string; email?: string; handleOTP: React.MouseEventHandler<HTMLButtonElement>; className?: string; }) {
 
+  const [state, setState] = React.useState<"idle" | "loading" | "success">("idle")
+
+
   const navigate = useNavigate();
 
   const handleResendOTP = async () => {
-    console.log("hello")
+    setState("loading");
 
     const token = getToken();
 
-    console.log(email)
 
-
-    const data = await fetch(`${URL}/auth/resend-otp`, {
+    const data = await fetch(`https://synap-circle.onrender.com/api/auth/resend-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -123,13 +132,23 @@ function BareBoneFooter({ cta, resend, email, changeEmail, handleOTP, className 
     if (!res.success) {
       alert("Something went wrong")
 
+      setState("idle")
+
       return;
 
     }
 
+    setState("idle")
+
     alert("Token Resent successfully")
 
   }
+
+
+  if (state === "loading") {
+    return <Loader heading="Resending your new OTP Token" description="Hang in tight you OTP token will arrive shortly" />
+  }
+
   return (
     <div className={cn("flex flex-col text-center space-y-1 mt-6", className)}>
       <Button onClick={handleOTP} > {cta} </Button>

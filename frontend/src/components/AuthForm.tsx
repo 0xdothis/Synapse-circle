@@ -17,6 +17,7 @@ import TermsCondition from "./TermsCondition";
 import PrivacyPolicy from "./PrivacyPolicy";
 import { type UserDataProps } from "./auth/signup"
 import type { ChangeEventHandler, SubmitEventHandler } from "react";
+import Loader from "@/components/Loader"
 
 interface AuthFormProps {
   title: string;
@@ -27,12 +28,18 @@ interface AuthFormProps {
   CTA: string;
   userInfo?: UserDataProps;
   onChange: ChangeEventHandler<HTMLInputElement>
-  onSubmit: SubmitEventHandler
+  onSubmit: SubmitEventHandler;
+  state?: string
 }
 
-function AuthForm({ title, description, CTA, userInfo, onChange, onSubmit, isSignup = false, className }: AuthFormProps) {
+function AuthForm({ title, description, state, CTA, userInfo, onChange, onSubmit, isSignup = false, className }: AuthFormProps) {
   const navigate = useNavigate();
   // const location = useLocation()
+  //
+  if (state === "loading") {
+
+    return <Loader heading={isSignup ? "Creating your account..." : "Welcome Back"} description={isSignup ? "Setting up your safety environment" : "Redirecting to SafeWalk Campus"} />
+  }
 
   if (!userInfo) {
     return;
