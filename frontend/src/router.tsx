@@ -28,11 +28,6 @@ const ContactForm = lazy(() => import("./pages/onboarding/ContactForm"))
 const SchoolForm = lazy(() => import("./pages/onboarding/SchoolForm"))
 
 
-
-
-
-
-
 export const router = createBrowserRouter([
   {
 
