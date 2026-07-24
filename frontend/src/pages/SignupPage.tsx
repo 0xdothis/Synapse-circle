@@ -1,7 +1,6 @@
 import Button from "@/components/ui/button"
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import ladyMobile from "../assets/signup/lady_mobile.png"
 import Link from "@/components/ui/Link"
 import Terms from "@/components/ui/Terms"
 import { useNavigate } from "react-router"
@@ -16,7 +15,18 @@ function SignupPage() {
       </Button>
 
       <div>
-        <img src={ladyMobile} alt="a lady in school holding a mobile device" className="w-full" />
+        <picture>
+          <source type="image/avif" srcSet="
+            /signup/lady_mobile.avif 1x, /signup/lady_mobile@2x.avif 2x, /signup/lady_mobile@3x.avif 3x
+            " />
+
+
+          <source type="image/png" srcSet="
+            /signup/lady_mobile.png 1x, /signup/lady_mobile@2x.png 2x, /signup/lady_mobile@3x.png 3x
+            " />
+          <img src="/signup/lady_mobile.png" alt="a lady in school holding a mobile device" className="w-full h-full" />
+        </picture>
+
       </div>
 
       <div className="w-full flex flex-col items-center text-center space-y-4">

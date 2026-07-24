@@ -10,11 +10,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import Logo from "./navigation/Logo"
+import { cn } from "@/utils";
 
-export function TermsCondition() {
+export function TermsCondition({ className, text = "Terms" }: { className?: string; text?: string }) {
   return (
     <Dialog>
-      <DialogTrigger render={<a>Terms</a>} />
+      <DialogTrigger nativeButton={false} render={<a className={cn(className)}>{text}</a>} />
       <DialogContent className="lg:min-w-4xl md:min-w-2xl">
         <DialogHeader className="items-center">
           <Logo />

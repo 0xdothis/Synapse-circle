@@ -1,5 +1,5 @@
 import Pill from "./ui/Pill";
-import phone from "../assets/home/phone.svg"
+
 import Button from "./ui/button";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
@@ -15,7 +15,7 @@ function Hero() {
   const navigate = useNavigate();
 
   return (
-    <section id="home" className="mt-20 w-full space-y-4 scroll-mt-20 lg:scroll-mt-30">
+    <section id="home" className="mt-20 w-full flex flex-col space-y-4 scroll-mt-20 lg:scroll-mt-30">
       <div className="lg:grid lg:grid-cols-2 lg:grid-rows-1 lg:gap-8 lg:justify-center lg:mt-24">
         <div className="space-y-4 lg:space-y-8 mt-4">
           <Pill text={"Campus safety, reimagined"} />
@@ -27,8 +27,20 @@ function Hero() {
           }}>Try SafeWalk Campus
             <HugeiconsIcon icon={ArrowRight01Icon} size={24} /></Button>
         </div>
-        <div className="overflow-hidden flex justify-center mt-12 mb-4 lg:mb-0">
-          <img src={phone} alt="hand holding a phone with safewalk app in it" className="lg:w-full" />
+        <div className="overflow-hidden items-center justify-center mt-12 mb-4 lg:mb-0">
+          <picture className="object-center w-75 lg:w-150">
+            <source type="image/avif" srcSet="
+            /home/phone.avif 1x, /home/phone@2x.avif 2x, /home/phone@3x.avif 3x
+            " />
+
+
+            <source type="image/png" srcSet="
+            /home/phone.png 1x, /home/phone@2x.png 2x, /home/phone@3x.png 3x
+            " />
+            <img src="/home/phone.png" alt="hand holding a phone with safewalk app in it" className="w-full h-full" />
+          </picture>
+
+
         </div>
         <Button className="lg:hidden w-full gap-2" onClick={() => navigate("/signup")}>Try SafeWalk Campus
           <HugeiconsIcon icon={ArrowRight01Icon} size={24} /></Button>

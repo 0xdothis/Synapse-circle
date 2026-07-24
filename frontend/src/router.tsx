@@ -18,6 +18,8 @@ import OnboardingLayout from "./layouts/OnboardingLayout";
 import Loader from "./components/Loader"
 import ErrorPage from "./pages/error";
 import RegistrationLayout from "./layouts/RegistrationLayout";
+import DashboardLayout from "./layouts/DashboardLayout";
+import UnderConstruction from "./pages/dashboard/UnderConstruction";
 const Welcome = lazy(() => import("./pages/onboarding/Welcome"));
 const Contact = lazy(() => import("./pages/onboarding/Contact"));
 const SchoolInfo = lazy(() => import("./pages/onboarding/SchoolInfo"));
@@ -51,15 +53,10 @@ export const router = createBrowserRouter([
       { path: "auth/reset-password", element: <Suspense fallback={<FullSpinner />}><ForgotPassword /></Suspense> },
       { path: "auth/reset-check", element: <Suspense fallback={<FullSpinner />}><CheckYourEmail /></Suspense> },
       {
-        path: "auth/verification", element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
+        path: "auth/verify-email", element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
       },
       { path: "auth/verified", element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
-      { path: "auth/reset-email", element: <Suspense fallback={<FullSpinner />}><ChangeEmail /></Suspense> },
-
-
-
-
-    ]
+      { path: "auth/reset-email", element: <Suspense fallback={<FullSpinner />}><ChangeEmail /></Suspense> }]
   },
   {
     path: "/onboarding",
@@ -75,5 +72,12 @@ export const router = createBrowserRouter([
 
     ]
 
+  },
+  {
+    path: "/dashboard",
+    element: <DashboardLayout />,
+    children: [
+      { index: true, element: <UnderConstruction /> }
+    ]
   }
 ])
