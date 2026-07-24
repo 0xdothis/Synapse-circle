@@ -14,12 +14,12 @@ export interface UserDataProps {
   phoneNumber: string;
 }
 
-const URL = import.meta.env.VITE_BACKEND_URL;
-
 
 function Signup() {
 
   const [userInfo, setUserInfo] = React.useState<UserDataProps>({ name: "", password: "", email: "", confirm_password: "", phoneNumber: "", terms: false })
+  const [state, setState] = React.useState<"idle" | "loading" | "success">("idle")
+
 
   const navigate = useNavigate();
 
@@ -34,6 +34,7 @@ function Signup() {
   const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
 
+    setState("loading")
     trackEvent("signup_submitted")
 
 
@@ -42,7 +43,7 @@ function Signup() {
     const userData: Omit<UserDataProps, "confirm_password" | "terms"> = cleanInfo
 
 
-    const res = await fetch(`${URL}/auth/signup`, {
+    const res = await fetch(`https://synap-circle.onrender.com/api/auth/signup`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -50,7 +51,7 @@ function Signup() {
       body: JSON.stringify(userData)
     })
 
-    const tokenReq = await fetch(`${URL}/auth/csrf-token`, {
+    const tokenReq = await fetch(`https://synap-circle.onrender.com/api/auth/csrf-token`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json"
@@ -66,6 +67,10 @@ function Signup() {
 
     if (data.success) {
 
+      setState("idle")
+
+      setUserInfo({ name: "", password: "", email: "", confirm_password: "", phoneNumber: "", terms: false })
+
       setToken(token?.csrfToken)
       trackEvent("signup_completed");
 
@@ -77,12 +82,9 @@ function Signup() {
 
     }
 
-
-
-
   }
 
-  return <AuthForm title="Create Account" description="Create your SafeWalk Campus account to get started." isSignup={true} to="/auth/verification" CTA="Create Account" onChange={handleChange} userInfo={userInfo} onSubmit={handleSubmit} />
+  return <AuthForm title="Create Account" description="Create your SafeWalk Campus account to get started." isSignup={true} to="/auth/verification" CTA="Create Account" onChange={handleChange} userInfo={userInfo} onSubmit={handleSubmit} state={state} />
 }
 
 export default Signup
