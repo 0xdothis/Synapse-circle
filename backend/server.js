@@ -12,11 +12,14 @@ import authRoutes from "./src/routes/auth.js";
 import contactRoutes from "./src/routes/contacts.js";
 import emergencyRoutes from "./src/routes/emergency.js";
 import sosRoutes from "./src/routes/sos.js";
+import profileRoutes from "./src/routes/profile.js";
 import { errorHandler } from "./src/middlewares/errorHandler.js";
 import { globalLimiter } from "./src/middlewares/rateLimiter.js";
 import { logger } from "./src/utils/logger.js";
+import cookieParser from "cookie-parser";
 
 const app = express();
+app.use(cookieParser());
 
 // Connect to MongoDB function
 const connectDB = async () => {
@@ -24,6 +27,12 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI);
     logger.info("MongoDB connected successfully");
     console.log("✅ MongoDB connected successfully");
+    console.log(
+      "🔎 DB:",
+      mongoose.connection.name,
+      "| host:",
+      mongoose.connection.host,
+    );
     return true;
   } catch (err) {
     logger.error("MongoDB connection error:", err);
@@ -32,21 +41,95 @@ const connectDB = async () => {
   }
 };
 
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+const isProduction = process.env.NODE_ENV === "production";
+
+// ─── CORS Configuration ──────────────────────────────────────────
+const allowedOrigins = [
+  "https://synapse-circle-tau.vercel.app",
+  "https://synapse-circle-tau.vercel.app/",
+  "https://synap-circle.onrender.com",
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  frontendUrl,
+];
+
+// Filter based on environment
+const filteredOrigins = isProduction
+  ? allowedOrigins.filter(
+      (origin) =>
+        !origin.includes("localhost") && !origin.includes("127.0.0.1"),
+    )
+  : allowedOrigins;
+
+// Remove duplicates
+const uniqueOrigins = [...new Set(filteredOrigins)];
+
+console.log("✅ CORS allowed origins:", uniqueOrigins);
+console.log(`📡 Environment: ${isProduction ? "Production" : "Development"}`);
+
 // Applying global middleware
 app.use(helmet());
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? ["https://synap-circle.onrender.com"]
-        : "*",
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // In development, allow any localhost origin
+      if (!isProduction && origin.startsWith("http://localhost")) {
+        return callback(null, true);
+      }
+
+      // Check if origin is in allowed list
+      if (uniqueOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      // If not allowed, log and reject
+      console.warn(`❌ CORS rejected origin: ${origin}`);
+      console.warn(`   Allowed origins: ${uniqueOrigins.join(", ")}`);
+
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
     credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+      "Origin",
+      "x-csrf-token",
+      "X-CSRF-Token",
+      "X-Request-ID",
+    ],
+    exposedHeaders: ["X-Request-ID"],
+    maxAge: 86400,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   }),
 );
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(mongoSanitize());
+
+// ─── Debug Middleware (optional - remove in production) ──────────
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log(
+    `📨 ${req.method} ${req.path} | Origin: ${origin || "No origin"}`,
+  );
+  next();
+});
 
 // SWAGGER DOCUMENTATION
 app.use(
@@ -66,7 +149,61 @@ app.use(
 // Global rate limiter
 app.use("/api", globalLimiter);
 
-// Health check endpoint
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: API health check
+ *     description: Returns the health status of the API server and database connection
+ *     tags: [Health]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: ok
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-07-20T19:34:50.000Z"
+ *                 uptime:
+ *                   type: number
+ *                   example: 123.45
+ *                 environment:
+ *                   type: string
+ *                   enum: [development, production, test]
+ *                 mongodb:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       example: connected
+ *                 services:
+ *                   type: object
+ *                   properties:
+ *                     email:
+ *                       type: string
+ *                       example: configured
+ *       503:
+ *         description: Service unavailable
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: string
+ *                   example: error
+ *                 message:
+ *                   type: string
+ *                   example: Database connection failed
+ */
 app.get("/health", (req, res) => {
   res.status(200).json({
     status: "ok",
@@ -80,6 +217,7 @@ app.get("/health", (req, res) => {
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/profile", profileRoutes);
 app.use("/api/contacts", contactRoutes);
 app.use("/api/emergency", emergencyRoutes);
 app.use("/api/sos", sosRoutes);

@@ -6,7 +6,11 @@ import {
 } from "../utils/tokenService.js";
 
 /**
- * cookies Authorization
+ * Reads the access token from the httpOnly cookie (web clients) or the
+ * Authorization header (native mobile clients — see tokenService.js for
+ * how tokens are issued differently per platform). This dual support is
+ * intentional given the API serves both a browser frontend and a native
+ * app; it's what verifyCsrfToken's Bearer-header bypass relies on.
  */
 const extractToken = (req) => {
   const cookieToken = getAccessTokenFromCookie(req);
@@ -35,7 +39,6 @@ const resolveUserFromToken = async (token) => {
 
   const user = await User.findById(decoded.userId);
   if (!user) {
-    // Return a special status for user not found - let the route handler decide
     return {
       errorStatus: 404,
       errorBody: {
@@ -43,7 +46,6 @@ const resolveUserFromToken = async (token) => {
         message: "User not found. Please log in again.",
         code: "USER_NOT_FOUND",
       },
-      // Signal that this is a user-not-found case, not an auth failure
       userNotFound: true,
     };
   }
@@ -101,7 +103,7 @@ const mapAuthError = (error) => {
 
 /**
  * Authentication middleware - verify JWT access token from cookie
- * (or Authorization header) and attach the user to the request.
+ * (web) or Authorization header (mobile) and attach the user to the request.
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -118,6 +120,7 @@ const authenticate = async (req, res, next) => {
     const result = await resolveUserFromToken(token);
 
     if (!result.user) {
+      req._userNotFound = !!result.userNotFound;
       return res.status(result.errorStatus).json(result.errorBody);
     }
 
@@ -200,7 +203,6 @@ const isOwnResource = (paramName = "id") => {
       });
     }
 
-    // Check if the user is accessing their own resource
     if (resourceId !== req.user._id.toString()) {
       return res.status(403).json({
         success: false,

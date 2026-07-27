@@ -12,6 +12,20 @@ const baseCookieOptions = {
   path: "/",
 };
 
+/**
+ * Native apps identify themselves with this header on every request.
+ * They get raw tokens in the JSON body (stored in Keychain/Keystore on
+ * the client) instead of cookies, and are exempt from CSRF checks since
+ * they aren't relying on ambient browser credentials.
+ *
+ * IMPORTANT: this header is just a routing hint, not a trust boundary —
+ * do not use it anywhere as an authorization decision. The actual CSRF
+ * bypass for authenticated routes is keyed off the presence of a Bearer
+ * token (see verifyCsrfToken below), which a browser page cannot forge.
+ */
+export const isMobileClient = (req) =>
+  req.headers["x-client-type"] === "mobile";
+
 export const generateAccessToken = (userId, email, role = "user") => {
   const token = jwt.sign(
     { userId, email, role, type: "access" },
@@ -28,22 +42,41 @@ export const generateAccessToken = (userId, email, role = "user") => {
   return token;
 };
 
+/**
+ * Refresh tokens carry a `jti` (JWT ID) so the session can be looked up,
+ * rotated, and revoked server-side — see services/sessionService.js.
+ * A bare JWT with no server-side record can never truly be revoked
+ * (logout / password-change previously only cleared cookies, which did
+ * nothing for a token that had already left the browser).
+ *
+ * BUGFIX: this previously read `config.jwtRefreshSecret` /
+ * `config.jwtRefreshExpiresIn`, which don't exist on the config object
+ * (config.js defines `refreshSecret` / `refreshExpiresIn`). As a result
+ * refresh tokens silently fell back to signing with the *access* token
+ * secret whenever REFRESH_TOKEN_SECRET wasn't set in the environment —
+ * i.e. access and refresh tokens shared one secret in most deployments.
+ */
 export const generateRefreshToken = (userId, email, role = "user") => {
+  const jti = crypto.randomUUID();
+
   const token = jwt.sign(
     { userId, email, role, type: "refresh" },
     process.env.REFRESH_TOKEN_SECRET ||
-      config.jwtRefreshSecret ||
+      config.refreshSecret ||
       config.jwtSecret,
-    { expiresIn: config.jwtRefreshExpiresIn || "7d" },
+    { expiresIn: config.refreshExpiresIn || "7d", jwtid: jti },
   );
+
+  const { exp } = jwt.decode(token);
 
   logger.debug("Refresh token generated", {
     userId,
     email,
-    expiresIn: config.jwtRefreshExpiresIn || "7d",
+    jti,
+    expiresIn: config.refreshExpiresIn || "7d",
   });
 
-  return token;
+  return { token, jti, expiresAt: new Date(exp * 1000) };
 };
 
 export const setAccessTokenCookie = (res, token) => {
@@ -90,6 +123,17 @@ export const generateCsrfToken = (res) => {
 };
 
 export const verifyCsrfToken = (req, res, next) => {
+  // Native app: no ambient cookie is being sent on its behalf by a
+  // browser, so cross-site request forgery doesn't apply to it.
+  if (isMobileClient(req)) return next();
+
+  // Any request already carrying an explicit Bearer credential was built
+  // deliberately by client code (a browser page cannot attach an
+  // Authorization header to a forged cross-site request), so it isn't
+  // exploitable via CSRF either.
+  const authHeader = req.headers.authorization;
+  if (authHeader?.startsWith("Bearer ")) return next();
+
   // Skip in development for easier testing
   if (!isProd) return next();
 
@@ -157,7 +201,7 @@ export const verifyRefreshToken = (token) => {
     const decoded = jwt.verify(
       token,
       process.env.REFRESH_TOKEN_SECRET ||
-        config.jwtRefreshSecret ||
+        config.refreshSecret ||
         config.jwtSecret,
     );
 

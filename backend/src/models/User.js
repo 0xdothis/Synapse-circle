@@ -1,22 +1,21 @@
 import mongoose from "mongoose";
-import { PHONE_REGEX, EMAIL_REGEX } from "../utils/regex.js";
+import { EMAIL_REGEX } from "../utils/regex.js";
 
 const userSchema = new mongoose.Schema(
   {
-    phoneNumber: {
+    name: {
       type: String,
-      unique: true,
-      sparse: true,
       trim: true,
-      match: [PHONE_REGEX, "Please enter a valid phone number"],
+      maxlength: [100, "Name cannot exceed 100 characters"],
     },
     email: {
       type: String,
-      required: [true, "Email is required for OTP"],
+      required: [true, "Email is required"],
       unique: true,
       trim: true,
       lowercase: true,
       match: [EMAIL_REGEX, "Please enter a valid email"],
+      index: true,
     },
     password: {
       type: String,
@@ -33,14 +32,25 @@ const userSchema = new mongoose.Schema(
       enum: ["local", "google"],
       default: "local",
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
     profilePicture: {
       type: String,
       trim: true,
-    },
-    name: {
-      type: String,
-      trim: true,
-      maxlength: [100, "Name cannot exceed 100 characters"],
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          try {
+            return new URL(v).protocol === "https:";
+          } catch {
+            return false;
+          }
+        },
+        message: "Profile picture must be a valid HTTPS URL",
+      },
     },
     isVerified: {
       type: Boolean,
@@ -125,7 +135,6 @@ const userSchema = new mongoose.Schema(
 );
 
 // Indexes
-userSchema.index({ phoneNumber: 1 });
 userSchema.index({ email: 1 });
 userSchema.index({ createdAt: -1 });
 
@@ -152,7 +161,6 @@ userSchema.methods.getSecurityContacts = async function () {
   return await university.getAllSecurityContacts();
 };
 
-// Added method to clean expired refresh tokens
 userSchema.methods.cleanExpiredRefreshTokens = function () {
   this.refreshTokens = this.refreshTokens.filter(
     (rt) => rt.expiresAt > new Date() && !rt.isRevoked,
@@ -160,14 +168,12 @@ userSchema.methods.cleanExpiredRefreshTokens = function () {
   return this;
 };
 
-// Added method to revoke all refresh tokens for a user
 userSchema.methods.revokeAllRefreshTokens = function () {
   this.refreshTokens = [];
   return this;
 };
 
 userSchema.methods.canResetPassword = function () {
-  // If user hasn't set a password yet, allow reset
   if (!this.password) return true;
   if (this.lastPasswordChange) {
     const minutesSinceChange =
@@ -176,11 +182,9 @@ userSchema.methods.canResetPassword = function () {
       return false;
     }
   }
-  // Check if user is active
   if (!this.isActive) {
     return false;
   }
-
   return true;
 };
 

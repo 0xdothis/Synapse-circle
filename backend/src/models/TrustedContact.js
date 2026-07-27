@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { PHONE_REGEX, EMAIL_REGEX } from "../utils/regex.js";
+import { EMAIL_REGEX } from "../utils/regex.js";
 import config from "../utils/config.js";
 
 const trustedContactSchema = new mongoose.Schema(
@@ -15,12 +15,6 @@ const trustedContactSchema = new mongoose.Schema(
       required: [true, "Contact name is required"],
       trim: true,
       maxlength: [100, "Name cannot exceed 100 characters"],
-    },
-    phoneNumber: {
-      type: String,
-      required: [true, "Phone number is required"],
-      trim: true,
-      match: [PHONE_REGEX, "Please enter a valid phone number"],
     },
     email: {
       type: String,
@@ -50,7 +44,8 @@ const trustedContactSchema = new mongoose.Schema(
 );
 
 // Composite index for user and contact
-trustedContactSchema.index({ userId: 1, phoneNumber: 1 }, { unique: true });
+trustedContactSchema.index({ userId: 1, email: 1 }, { unique: true });
+
 trustedContactSchema.pre("save", async function (next) {
   const isBecomingActive = this.isNew
     ? this.isActive
@@ -76,7 +71,6 @@ trustedContactSchema.pre("save", async function (next) {
   next();
 });
 
-// Method to safely return contact data
 trustedContactSchema.methods.toJSON = function () {
   const contact = this.toObject({ virtuals: true });
   delete contact.__v;

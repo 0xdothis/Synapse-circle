@@ -1,6 +1,5 @@
 /**
  * Central place to read and validate environment configuration.
- *
  */
 
 const required = ["JWT_SECRET"];

@@ -18,12 +18,8 @@ class SOSService {
         error.statusCode = 401;
         throw error;
       }
-      const {
-        latitude,
-        longitude,
-        locationAvailable = true,
-        message,
-      } = locationData;
+
+      const { latitude, longitude, locationAvailable = true } = locationData;
 
       // Get user details
       const user = await User.findById(userId);
@@ -33,19 +29,39 @@ class SOSService {
         throw error;
       }
 
+      const FIXED_MESSAGE =
+        "Help me, I am in an unsafe environment and I feel unsafe, here's my live location.";
+
       // Get trusted contacts
       const trustedContacts = await TrustedContact.find({
         userId,
         isActive: true,
       });
 
-      // Get campus security contacts
-      const securityContacts = await CampusSecurity.find({
+      let securityContacts = [];
+      if (user.universityId) {
+        securityContacts = await CampusSecurity.find({
+          isActive: true,
+          universityId: user.universityId,
+        });
+      } else {
+        securityContacts = await CampusSecurity.find({
+          isActive: true,
+        });
+      }
+
+      // Get emergency directory contacts
+      const emergencyContacts = await EmergencyDirectory.find({
         isActive: true,
-      });
+        isVerified: true,
+      }).limit(10);
 
       // Check if there are any recipients
-      if (trustedContacts.length === 0 && securityContacts.length === 0) {
+      if (
+        trustedContacts.length === 0 &&
+        securityContacts.length === 0 &&
+        emergencyContacts.length === 0
+      ) {
         const error = new Error(
           "No contacts available. Please add trusted contacts first.",
         );
@@ -53,8 +69,12 @@ class SOSService {
         throw error;
       }
 
-      if (message) {
-        alert.message = message;
+      if (!latitude || !longitude) {
+        const error = new Error(
+          "Location is required to send an SOS alert. Please enable location services.",
+        );
+        error.statusCode = 400;
+        throw error;
       }
 
       // Generate location link
@@ -63,14 +83,14 @@ class SOSService {
           ? `https://www.google.com/maps?q=${latitude},${longitude}`
           : null;
 
-      // Create alert record
+      // Create alert record with message included
       const alert = await SOSAlert.create({
         userId,
         latitude: latitude || null,
         longitude: longitude || null,
         locationAvailable,
         locationLink,
-        message: message || null,
+        message: FIXED_MESSAGE,
         status: "sent",
         recipients: [],
         contactsNotified: [],
@@ -103,6 +123,7 @@ class SOSService {
         });
       });
 
+      //Add emergency directory contacts
       emergencyContacts.forEach((emergency) => {
         recipients.push({
           type: "emergency_directory",
@@ -129,7 +150,7 @@ class SOSService {
         alertId: alert._id.toString(),
         isCancelled: false,
         timestamp: new Date().toISOString(),
-        message: message || null,
+        message: FIXED_MESSAGE,
         contacts: recipients.map((r) => ({
           email: r.email,
           name: r.name,
@@ -162,25 +183,42 @@ class SOSService {
       await alert.save();
 
       // Create alert recipient records
-      const recipientPromises = recipients.map((recipient, index) => {
-        return AlertRecipient.create({
-          alertId: alert._id,
-          userId,
-          recipientType: recipient.type,
-          recipientId: recipient.recipientId,
-          name: recipient.name,
-          email: recipient.email,
-          phoneNumber: recipient.phoneNumber,
-          emailStatus: emailResults[index].success ? "delivered" : "failed",
-          emailSentAt: new Date(),
-          emailError: emailResults[index].success
-            ? null
-            : emailResults[index].error,
-          delivered: emailResults[index].success,
-        });
-      });
+      const recipientOperations = recipients.map((recipient, index) => ({
+        insertOne: {
+          document: {
+            alertId: alert._id,
+            userId,
+            recipientType: recipient.type,
+            recipientId: recipient.recipientId,
+            name: recipient.name,
+            email: recipient.email,
+            phoneNumber: recipient.phoneNumber,
+            emailStatus: emailResults[index].success ? "delivered" : "failed",
+            emailSentAt: new Date(),
+            emailError: emailResults[index].success
+              ? null
+              : emailResults[index].error,
+            delivered: emailResults[index].success,
+          },
+        },
+      }));
 
-      await Promise.all(recipientPromises);
+      if (recipientOperations.length > 0) {
+        await AlertRecipient.bulkWrite(recipientOperations, { ordered: false });
+      }
+
+      Promise.resolve(
+        emailService.sendSOSConfirmationToUser(userId, {
+          alertId: alert._id,
+          latitude,
+          longitude,
+          locationLink,
+          message: FIXED_MESSAGE,
+          timestamp: new Date().toISOString(),
+        }),
+      ).catch((err) => {
+        logger.error("SOS confirmation email failed:", err);
+      });
 
       // Calculate delivery stats
       const deliveredCount = notifications.filter((n) => n.delivered).length;
@@ -304,10 +342,16 @@ class SOSService {
       }
 
       const alerts = await SOSAlert.find(query)
+        .select(
+          "status createdAt latitude longitude locationAvailable locationLink contactsNotified recipients cancelledAt cancellationReason",
+        )
         .sort({ createdAt: -1 })
         .skip(offset)
-        .limit(limit);
+        .limit(limit)
+        .lean()
+        .exec();
 
+      // Use estimatedDocumentCount for faster count on large collections
       const total = await SOSAlert.countDocuments(query);
 
       return {
@@ -315,11 +359,13 @@ class SOSService {
           id: alert._id,
           status: alert.status,
           timestamp: alert.createdAt,
-          location: {
-            latitude: alert.latitude,
-            longitude: alert.longitude,
-            available: alert.locationAvailable,
-          },
+          location: alert.locationAvailable
+            ? {
+                latitude: alert.latitude,
+                longitude: alert.longitude,
+                available: alert.locationAvailable,
+              }
+            : null,
           locationLink: alert.locationLink,
           contactsNotified: alert.contactsNotified,
           cancelledAt: alert.cancelledAt,
