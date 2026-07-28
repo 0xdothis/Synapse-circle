@@ -21,7 +21,6 @@ async function monitorDB() {
     console.log(`\n📚 Collections: ${collections.length}`);
 
     for (const coll of collections) {
-      // Use aggregate to get stats instead of deprecated collStats
       const stats = await db
         .collection(coll.name)
         .aggregate([{ $collStats: { storageStats: {} } }])

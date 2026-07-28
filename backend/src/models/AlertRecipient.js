@@ -30,9 +30,6 @@ const alertRecipientSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    phoneNumber: {
-      type: String,
-    },
     emailStatus: {
       type: String,
       enum: ["pending", "sent", "delivered", "failed"],
@@ -42,17 +39,6 @@ const alertRecipientSchema = new mongoose.Schema(
       type: Date,
     },
     emailError: {
-      type: String,
-    },
-    smsStatus: {
-      type: String,
-      enum: ["pending", "sent", "delivered", "failed"],
-      default: "pending",
-    },
-    smsSentAt: {
-      type: Date,
-    },
-    smsError: {
       type: String,
     },
     delivered: {

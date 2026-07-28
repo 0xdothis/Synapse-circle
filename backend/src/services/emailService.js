@@ -54,8 +54,108 @@ class EmailService {
         };
       }
 
-      // Send email via Brevo (existing email template)
-      // ... rest of email sending code
+      // Send email via Brevo
+      const subject =
+        purpose === "signup"
+          ? "SafeWalk Campus - Verify Your Email"
+          : "SafeWalk Campus - Your Verification Code";
+
+      const sendSmtpEmail = new brevo.SendSmtpEmail();
+      sendSmtpEmail.subject = subject;
+      sendSmtpEmail.htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background-color: #f4f6f5; padding: 20px; margin: 0; }
+          .container { max-width: 500px; width: 100%; box-sizing: border-box; margin: 0 auto; background-color: #ffffff; border-radius: 12px; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+          .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
+          .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: #0d7377; }
+          .eyebrow { color: #9aa1a0; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
+          .otp-box { background-color: #f2f7f6; border: 1px solid #e3ede9; padding: 30px; border-radius: 12px; text-align: center; margin: 25px 0; }
+          .otp-code { font-size: 40px; font-weight: bold; letter-spacing: 12px; color: #1a1a1a; font-family: 'Courier New', monospace; }
+          .expiry-text { color: #0d7377; font-size: 13px; font-weight: 600; margin-top: 14px; }
+          .info { background-color: #f8f9fa; border-radius: 8px; padding: 15px; margin: 20px 0; }
+          .info p { margin: 5px 0; color: #555; }
+          .warning { color: #b45309; font-size: 14px; margin-top: 20px; }
+          .footer { color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #eef1f0; padding-top: 20px; }
+
+          @media only screen and (max-width: 480px) {
+            body { padding: 12px; }
+            .container { padding: 24px 20px; border-radius: 8px; }
+            .header { flex-wrap: wrap; row-gap: 8px; }
+            .brand { font-size: 16px; }
+            .eyebrow { font-size: 10px; }
+            .otp-box { padding: 20px 12px; }
+            .otp-code { font-size: 30px; letter-spacing: 6px; }
+            .info { padding: 12px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <div class="brand">🛡️ SafeWalk Campus</div>
+            <div class="eyebrow">${purpose === "signup" ? "Email Verification" : "Verification Code"}</div>
+          </div>
+
+          <p style="color: #666; margin-bottom: 20px;">Use the following code to ${purpose === "signup" ? "verify your email address" : "continue"}:</p>
+
+          <div class="otp-box">
+            <div class="otp-code">${otpCode}</div>
+            <div class="expiry-text">This code will expire in ${config.otpExpiryMinutes} minutes.</div>
+          </div>
+
+          <div class="info">
+            <p><strong>🔐 Purpose:</strong> ${purpose === "signup" ? "Account Verification" : purpose}</p>
+          </div>
+
+          <p style="color: #666;">If you didn't request this code, you can safely ignore this email.</p>
+          <div class="warning">⚠️ Never share this OTP with anyone</div>
+
+          <div class="footer">
+            <p style="margin: 0;">SafeWalk Campus - Emergency Alert System</p>
+            <p style="margin: 5px 0 0;">This is an automated message. Please do not reply.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+      sendSmtpEmail.textContent = `
+      SafeWalk Campus - ${purpose === "signup" ? "Email Verification" : "Verification Code"}
+
+      Your OTP code is: ${otpCode}
+
+      Expires in: ${config.otpExpiryMinutes} minutes
+      Purpose: ${purpose}
+
+      If you didn't request this code, you can safely ignore this email.
+      Never share this OTP with anyone.
+
+      SafeWalk Campus - Emergency Alert System
+      This is an automated message. Please do not reply.
+    `;
+      sendSmtpEmail.sender = {
+        name: this.senderName,
+        email: this.fromEmail,
+      };
+      sendSmtpEmail.to = [{ email }];
+      sendSmtpEmail.replyTo = {
+        email: this.fromEmail,
+        name: "SafeWalk Campus Support",
+      };
+
+      const result = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
+
+      logger.info(`OTP sent to ${email}: ${result.messageId}`);
+
+      return {
+        success: true,
+        message: "OTP sent successfully to your email",
+        ...(config.isDevelopment && { development_otp: otpCode }),
+      };
     } catch (error) {
       logger.error("OTP email send error:", error);
       throw new Error("Failed to send OTP via email. Please try again.");
@@ -510,7 +610,9 @@ class EmailService {
   async sendPasswordResetOTP(email, userName) {
     try {
       const otpCode = this.generateOTP();
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+      const expiresAt = new Date(
+        Date.now() + config.otpExpiryMinutes * 60 * 1000,
+      );
 
       const otp = await OTP.create({
         email,
@@ -580,7 +682,7 @@ class EmailService {
 
           <div class="otp-box">
             <div class="otp-code">${otpCode}</div>
-            <div class="expiry-text">This code will expire in 10 minutes.</div>
+            <div class="expiry-text">This code will expire in ${config.otpExpiryMinutes} minutes.</div>
           </div>
 
           <div class="info">
@@ -605,7 +707,7 @@ class EmailService {
 
       We received a request to reset your password. Your OTP code is: ${otpCode}
 
-      Expires in: 10 minutes
+      Expires in: ${config.otpExpiryMinutes} minutes
       Purpose: Password Reset
 
       If you didn't request a password reset, please ignore this email.
@@ -627,13 +729,15 @@ class EmailService {
       const result = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
 
       logger.info(`Password reset OTP sent to ${email}: ${result.messageId}`);
-      console.log(`📧 Password Reset OTP for ${email}: ${otpCode}`);
+      if (config.isDevelopment) {
+        console.log(`📧 Password Reset OTP for ${email}: ${otpCode}`);
+      }
 
       return {
         success: true,
         message: "Password reset OTP sent successfully",
-        development_otp: otpCode,
         resetId: otp._id,
+        ...(config.isDevelopment && { development_otp: otpCode }),
       };
     } catch (error) {
       logger.error("Password reset OTP send error:", error);

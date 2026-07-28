@@ -21,7 +21,6 @@ import cookieParser from "cookie-parser";
 const app = express();
 app.use(cookieParser());
 
-// Connect to MongoDB function
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGODB_URI);
@@ -41,88 +40,43 @@ const connectDB = async () => {
   }
 };
 
-const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-const isProduction = process.env.NODE_ENV === "production";
+// CORS Configuration
+const corsOptions = {
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+    "x-csrf-token",
+    "X-CSRF-Token",
+    "X-Request-ID",
+    "Cookie",
+  ],
+  exposedHeaders: ["X-Request-ID"],
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
+};
 
-// ─── CORS Configuration ──────────────────────────────────────────
-const allowedOrigins = [
-  "https://synapse-circle-tau.vercel.app",
-  "https://synapse-circle-tau.vercel.app/",
-  "https://synap-circle.onrender.com",
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:3002",
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://127.0.0.1:3000",
-  "http://127.0.0.1:5173",
-  frontendUrl,
-];
+console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
+console.log("🔒 CORS: Open (wildcard - all origins allowed)");
 
-// Filter based on environment
-const filteredOrigins = isProduction
-  ? allowedOrigins.filter(
-      (origin) =>
-        !origin.includes("localhost") && !origin.includes("127.0.0.1"),
-    )
-  : allowedOrigins;
-
-// Remove duplicates
-const uniqueOrigins = [...new Set(filteredOrigins)];
-
-console.log("✅ CORS allowed origins:", uniqueOrigins);
-console.log(`📡 Environment: ${isProduction ? "Production" : "Development"}`);
-
-// Applying global middleware
-app.use(helmet());
 app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      // In development, allow any localhost origin
-      if (!isProduction && origin.startsWith("http://localhost")) {
-        return callback(null, true);
-      }
-
-      // Check if origin is in allowed list
-      if (uniqueOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // If not allowed, log and reject
-      console.warn(`❌ CORS rejected origin: ${origin}`);
-      console.warn(`   Allowed origins: ${uniqueOrigins.join(", ")}`);
-
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allowedHeaders: [
-      "Content-Type",
-      "Authorization",
-      "X-Requested-With",
-      "Accept",
-      "Origin",
-      "x-csrf-token",
-      "X-CSRF-Token",
-      "X-Request-ID",
-    ],
-    exposedHeaders: ["X-Request-ID"],
-    maxAge: 86400,
-    preflightContinue: false,
-    optionsSuccessStatus: 204,
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginOpenerPolicy: { policy: "unsafe-none" },
   }),
 );
+app.use(cors(corsOptions));
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(mongoSanitize());
 
-// ─── Debug Middleware (optional - remove in production) ──────────
+// Debug Middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   console.log(
@@ -146,7 +100,6 @@ app.use(
   }),
 );
 
-// Global rate limiter
 app.use("/api", globalLimiter);
 
 /**

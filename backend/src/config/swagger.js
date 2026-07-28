@@ -92,22 +92,16 @@ const options = {
         },
       },
       schemas: {
-        // ============ AUTH SCHEMAS ============
+        // AUTH SCHEMAS
         SignupRequest: {
           type: "object",
-          required: ["email", "phoneNumber", "password"],
+          required: ["email", "password"],
           properties: {
             email: {
               type: "string",
               format: "email",
               example: "student@campus.edu",
               description: "Valid email address for OTP verification",
-            },
-            phoneNumber: {
-              type: "string",
-              pattern: String.raw`^\+?[1-9]\d{1,14}$`,
-              example: "+1234567890",
-              description: "Phone number in E.164 format",
             },
             name: {
               type: "string",
@@ -240,7 +234,7 @@ const options = {
           },
         },
 
-        // ============ USER SCHEMAS ============
+        // USER SCHEMAS
         User: {
           type: "object",
           properties: {
@@ -250,7 +244,6 @@ const options = {
               format: "email",
               example: "student@campus.edu",
             },
-            phoneNumber: { type: "string", example: "+1234567890" },
             name: { type: "string", example: "John Doe" },
             isVerified: { type: "boolean", example: true },
             isActive: { type: "boolean", example: true },
@@ -291,14 +284,13 @@ const options = {
           },
         },
 
-        // ============ PROFILE SCHEMAS ============
+        // PROFILE SCHEMAS
         Profile: {
           type: "object",
           properties: {
             id: { type: "string" },
             name: { type: "string" },
             email: { type: "string", format: "email" },
-            phoneNumber: { type: "string" },
             profilePicture: { type: "string", nullable: true },
             university: { type: "string" },
             universityId: { type: "string", nullable: true },
@@ -353,7 +345,6 @@ const options = {
           properties: {
             name: { type: "string", maxLength: 100 },
             email: { type: "string", format: "email" },
-            phoneNumber: { type: "string" },
             university: { type: "string" },
             universityId: { type: "string" },
             preferences: {
@@ -366,13 +357,12 @@ const options = {
           },
         },
 
-        // ============ CONTACT SCHEMAS ============
+        // CONTACT SCHEMAS
         TrustedContact: {
           type: "object",
           properties: {
             id: { type: "string", example: "507f1f77bcf86cd799439011" },
             name: { type: "string", example: "Jane Smith" },
-            phoneNumber: { type: "string", example: "+1234567891" },
             email: {
               type: "string",
               format: "email",
@@ -396,14 +386,9 @@ const options = {
         },
         CreateContactRequest: {
           type: "object",
-          required: ["name", "phoneNumber", "email", "relationship"],
+          required: ["name", "email", "relationship"],
           properties: {
             name: { type: "string", example: "Jane Smith" },
-            phoneNumber: {
-              type: "string",
-              pattern: String.raw`^\+?[1-9]\d{1,14}$`,
-              example: "+1234567891",
-            },
             email: {
               type: "string",
               format: "email",
@@ -427,10 +412,6 @@ const options = {
           type: "object",
           properties: {
             name: { type: "string", maxLength: 100 },
-            phoneNumber: {
-              type: "string",
-              pattern: String.raw`^\+?[1-9]\d{1,14}$`,
-            },
             email: { type: "string", format: "email" },
             relationship: {
               type: "string",
@@ -460,7 +441,7 @@ const options = {
           },
         },
 
-        // ============ SOS ALERT SCHEMAS ============
+        // SOS ALERT SCHEMAS
         TriggerSOSRequest: {
           type: "object",
           required: ["latitude", "longitude"],
@@ -507,6 +488,8 @@ const options = {
             locationLink: { type: "string" },
             contactsNotified: {
               type: "array",
+              description:
+                "Recipients notified for this alert. Backed by the AlertRecipient collection (email delivery only).",
               items: {
                 type: "object",
                 properties: {
@@ -615,7 +598,7 @@ const options = {
           },
         },
 
-        // ============ EMERGENCY DIRECTORY SCHEMAS ============
+        // EMERGENCY DIRECTORY SCHEMAS
         EmergencyContact: {
           type: "object",
           properties: {
@@ -657,7 +640,7 @@ const options = {
           },
         },
 
-        // ============ CAMPUS SECURITY SCHEMAS ============
+        // CAMPUS SECURITY SCHEMAS
         CampusSecurity: {
           type: "object",
           properties: {
@@ -673,7 +656,7 @@ const options = {
           },
         },
 
-        // ============ ONBOARDING SCHEMAS ============
+        //ONBOARDING SCHEMAS
         OnboardingStatusResponse: {
           type: "object",
           properties: {
@@ -765,7 +748,7 @@ const options = {
           },
         },
 
-        // ============ ERROR SCHEMAS ============
+        // ERROR SCHEMAS
         ErrorResponse: {
           type: "object",
           properties: {
@@ -813,7 +796,7 @@ const options = {
           },
         },
 
-        // ============ HEALTH SCHEMAS ============
+        //HEALTH SCHEMAS
         HealthResponse: {
           type: "object",
           properties: {

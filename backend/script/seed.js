@@ -21,9 +21,7 @@ const seedData = async () => {
     await EmergencyDirectory.deleteMany({});
     console.log("🧹 Cleared existing data");
 
-    // ============================================
     // 1. Seed Campus Security
-    // ============================================
     const securityContacts = [
       {
         name: "Campus Security Main Desk",
@@ -55,10 +53,8 @@ const seedData = async () => {
 
     await CampusSecurity.insertMany(securityContacts);
     console.log("✅ Campus Security seeded (2 contacts)");
-
-    // ============================================
+    
     // 2. Seed Emergency Directory - Complete
-    // ============================================
     const emergencyContacts = [
       // ---------- SECURITY ----------
       {

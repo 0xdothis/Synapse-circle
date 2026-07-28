@@ -39,41 +39,11 @@ const sosAlertSchema = new mongoose.Schema(
       type: String,
       enum: ["false_alarm", "resolved", "user_error"],
     },
-    contactsNotified: {
-      type: [
-        {
-          type: {
-            type: String,
-            enum: ["trusted_contact", "campus_security", "emergency_directory"],
-          },
-          name: String,
-          email: String,
-          phoneNumber: String,
-          delivered: {
-            type: Boolean,
-            default: false,
-          },
-          deliveredAt: Date,
-          error: String,
-        },
-      ],
-      default: [],
-    },
-    recipients: {
-      type: [
-        {
-          type: {
-            type: String,
-            enum: ["trusted_contact", "campus_security", "emergency_directory"],
-          },
-          recipientId: mongoose.Schema.Types.ObjectId,
-          email: String,
-          phoneNumber: String,
-          name: String,
-        },
-      ],
-      default: [],
-    },
+    // Who was notified and their delivery status now lives exclusively in
+    // the AlertRecipient collection (query with { alertId: this._id }).
+    // This alert previously also embedded `contactsNotified` and
+    // `recipients` arrays that duplicated the same data — removed to stop
+    // maintaining two sources of truth for delivery state.
     emailSubject: {
       type: String,
     },

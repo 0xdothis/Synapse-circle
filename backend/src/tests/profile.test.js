@@ -612,8 +612,6 @@ describe("Profile API Tests", () => {
         expect(alert).toHaveProperty("status");
         expect(alert).toHaveProperty("message");
         expect(alert).toHaveProperty("timestamp");
-        expect(alert).toHaveProperty("contactsNotified");
-        expect(alert).toHaveProperty("recipients");
         expect(alert).toHaveProperty("canCancel");
         expect(alert).toHaveProperty("cancellationTimeRemaining");
 
@@ -705,8 +703,6 @@ describe("Profile API Tests", () => {
       expect(alert).toHaveProperty("status");
       expect(alert).toHaveProperty("message");
       expect(alert).toHaveProperty("timestamp");
-      expect(alert).toHaveProperty("contactsNotified");
-      expect(alert).toHaveProperty("recipients");
       expect(alert).toHaveProperty("canCancel");
       expect(alert).toHaveProperty("cancellationTimeRemaining");
 

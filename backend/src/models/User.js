@@ -104,30 +104,14 @@ const userSchema = new mongoose.Schema(
     lastPasswordChange: {
       type: Date,
     },
-    refreshTokens: [
-      {
-        token: {
-          type: String,
-          required: true,
-        },
-        expiresAt: {
-          type: Date,
-          required: true,
-        },
-        createdAt: {
-          type: Date,
-          default: Date.now,
-        },
-        deviceInfo: {
-          type: String,
-          default: "Unknown device",
-        },
-        isRevoked: {
-          type: Boolean,
-          default: false,
-        },
-      },
-    ],
+    // Session/refresh-token state is NOT stored here. It lives in the
+    // RefreshToken collection (see models/RefreshToken.js), which stores
+    // only a SHA-256 hash of each token plus a jti — never the raw token.
+    // This document used to also embed a `refreshTokens` array holding
+    // raw tokens directly on the user, which duplicated that collection
+    // and undermined the whole point of hashing (a DB read alone could
+    // forge a session). Removed — confirm services/sessionService.js
+    // reads/writes RefreshToken exclusively before deploying this change.
   },
   {
     timestamps: true,
@@ -159,18 +143,6 @@ userSchema.methods.getSecurityContacts = async function () {
   }
 
   return await university.getAllSecurityContacts();
-};
-
-userSchema.methods.cleanExpiredRefreshTokens = function () {
-  this.refreshTokens = this.refreshTokens.filter(
-    (rt) => rt.expiresAt > new Date() && !rt.isRevoked,
-  );
-  return this;
-};
-
-userSchema.methods.revokeAllRefreshTokens = function () {
-  this.refreshTokens = [];
-  return this;
 };
 
 userSchema.methods.canResetPassword = function () {

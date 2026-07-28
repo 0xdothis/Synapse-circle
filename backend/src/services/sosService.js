@@ -83,7 +83,7 @@ class SOSService {
           ? `https://www.google.com/maps?q=${latitude},${longitude}`
           : null;
 
-      // Create alert record with message included
+      // Create the alert record.
       const alert = await SOSAlert.create({
         userId,
         latitude: latitude || null,
@@ -92,57 +92,44 @@ class SOSService {
         locationLink,
         message: FIXED_MESSAGE,
         status: "sent",
-        recipients: [],
-        contactsNotified: [],
       });
 
-      // Prepare recipients
+      // Build the recipient list for this alert. Alerts are email-only
       const recipients = [];
 
-      // Add trusted contacts
       trustedContacts.forEach((contact) => {
         recipients.push({
           type: "trusted_contact",
           recipientId: contact._id,
           email: contact.email,
-          phoneNumber: contact.phoneNumber,
           name: contact.name,
           relationship: contact.relationship,
         });
       });
 
-      // Add campus security
       securityContacts.forEach((security) => {
         recipients.push({
           type: "campus_security",
           recipientId: security._id,
           email: security.email,
-          phoneNumber: security.phoneNumber,
           name: security.name,
           relationship: "campus_security",
         });
       });
 
-      //Add emergency directory contacts
       emergencyContacts.forEach((emergency) => {
         recipients.push({
           type: "emergency_directory",
           recipientId: emergency._id,
           email: emergency.email,
-          phoneNumber: emergency.phoneNumber,
           name: emergency.name,
           relationship: emergency.type,
         });
       });
 
-      // Update alert with recipients
-      alert.recipients = recipients;
-      await alert.save();
-
-      // Prepare email data
+      // Prepare and send emails
       const emailData = {
-        userName: user.name || user.phoneNumber,
-        userPhone: user.phoneNumber,
+        userName: user.name || user.email,
         userEmail: user.email,
         latitude,
         longitude,
@@ -159,30 +146,9 @@ class SOSService {
         })),
       };
 
-      // Send emails
       const emailResults = await emailService.sendBulkSOSAlerts(emailData);
 
-      // Log delivery results
-      const notifications = [];
-      emailResults.forEach((result, index) => {
-        const recipient = recipients[index];
-        notifications.push({
-          type: recipient.type,
-          name: recipient.name,
-          email: recipient.email,
-          phoneNumber: recipient.phoneNumber,
-          delivered: result.success,
-          deliveredAt: result.success ? new Date() : null,
-          error: result.success ? null : result.error,
-        });
-      });
-
-      // Update alert with notification results
-      alert.contactsNotified = notifications;
-      alert.emailSentAt = new Date();
-      await alert.save();
-
-      // Create alert recipient records
+      // Persist delivery results directly as AlertRecipient documents
       const recipientOperations = recipients.map((recipient, index) => ({
         insertOne: {
           document: {
@@ -192,7 +158,6 @@ class SOSService {
             recipientId: recipient.recipientId,
             name: recipient.name,
             email: recipient.email,
-            phoneNumber: recipient.phoneNumber,
             emailStatus: emailResults[index].success ? "delivered" : "failed",
             emailSentAt: new Date(),
             emailError: emailResults[index].success
@@ -207,6 +172,9 @@ class SOSService {
         await AlertRecipient.bulkWrite(recipientOperations, { ordered: false });
       }
 
+      alert.emailSentAt = new Date();
+      await alert.save();
+
       Promise.resolve(
         emailService.sendSOSConfirmationToUser(userId, {
           alertId: alert._id,
@@ -220,7 +188,14 @@ class SOSService {
         logger.error("SOS confirmation email failed:", err);
       });
 
-      // Calculate delivery stats
+      // Build the response's notification summary
+      const notifications = recipients.map((recipient, index) => ({
+        type: recipient.type,
+        name: recipient.name,
+        email: recipient.email,
+        delivered: emailResults[index].success,
+      }));
+
       const deliveredCount = notifications.filter((n) => n.delivered).length;
       const totalCount = notifications.length;
 
@@ -282,7 +257,6 @@ class SOSService {
       const recipients = await AlertRecipient.find({ alertId });
 
       if (recipients.length > 0) {
-        // Prepare contacts for cancellation email
         const contacts = recipients.map((r) => ({
           email: r.email,
           name: r.name,
@@ -291,8 +265,7 @@ class SOSService {
         }));
 
         const emailData = {
-          userName: user.name || user.phoneNumber,
-          userPhone: user.phoneNumber,
+          userName: user.name || user.email,
           userEmail: user.email,
           latitude: alert.latitude,
           longitude: alert.longitude,
@@ -343,7 +316,7 @@ class SOSService {
 
       const alerts = await SOSAlert.find(query)
         .select(
-          "status createdAt latitude longitude locationAvailable locationLink contactsNotified recipients cancelledAt cancellationReason",
+          "status createdAt latitude longitude locationAvailable locationLink cancelledAt cancellationReason",
         )
         .sort({ createdAt: -1 })
         .skip(offset)
@@ -351,27 +324,51 @@ class SOSService {
         .lean()
         .exec();
 
-      // Use estimatedDocumentCount for faster count on large collections
       const total = await SOSAlert.countDocuments(query);
 
+      // One aggregation covering every alert on this page, instead of a
+      // per-alert query, to get recipient/delivery counts from
+      // AlertRecipient (the only place that data lives now).
+      const alertIds = alerts.map((alert) => alert._id);
+      const recipientStats = await AlertRecipient.aggregate([
+        { $match: { alertId: { $in: alertIds } } },
+        {
+          $group: {
+            _id: "$alertId",
+            total: { $sum: 1 },
+            delivered: { $sum: { $cond: ["$delivered", 1, 0] } },
+          },
+        },
+      ]);
+      const statsByAlertId = new Map(
+        recipientStats.map((stat) => [stat._id.toString(), stat]),
+      );
+
       return {
-        alerts: alerts.map((alert) => ({
-          id: alert._id,
-          status: alert.status,
-          timestamp: alert.createdAt,
-          location: alert.locationAvailable
-            ? {
-                latitude: alert.latitude,
-                longitude: alert.longitude,
-                available: alert.locationAvailable,
-              }
-            : null,
-          locationLink: alert.locationLink,
-          contactsNotified: alert.contactsNotified,
-          cancelledAt: alert.cancelledAt,
-          cancellationReason: alert.cancellationReason,
-          recipients: alert.recipients.length,
-        })),
+        alerts: alerts.map((alert) => {
+          const stats = statsByAlertId.get(alert._id.toString()) || {
+            total: 0,
+            delivered: 0,
+          };
+
+          return {
+            id: alert._id,
+            status: alert.status,
+            timestamp: alert.createdAt,
+            location: alert.locationAvailable
+              ? {
+                  latitude: alert.latitude,
+                  longitude: alert.longitude,
+                  available: alert.locationAvailable,
+                }
+              : null,
+            locationLink: alert.locationLink,
+            cancelledAt: alert.cancelledAt,
+            cancellationReason: alert.cancellationReason,
+            recipients: stats.total,
+            delivered: stats.delivered,
+          };
+        }),
         total,
         offset,
         limit,
@@ -395,6 +392,10 @@ class SOSService {
         throw error;
       }
 
+      const recipients = await AlertRecipient.find({ alertId }).select(
+        "recipientType name email delivered emailStatus emailSentAt",
+      );
+
       return {
         id: alert._id,
         status: alert.status,
@@ -405,8 +406,14 @@ class SOSService {
           available: alert.locationAvailable,
         },
         locationLink: alert.locationLink,
-        contactsNotified: alert.contactsNotified,
-        recipients: alert.recipients,
+        contactsNotified: recipients.map((r) => ({
+          type: r.recipientType,
+          name: r.name,
+          email: r.email,
+          delivered: r.delivered,
+          emailStatus: r.emailStatus,
+          emailSentAt: r.emailSentAt,
+        })),
         cancelledAt: alert.cancelledAt,
         cancellationReason: alert.cancellationReason,
         canCancel: alert.canCancel(),

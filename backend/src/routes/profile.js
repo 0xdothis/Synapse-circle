@@ -31,6 +31,16 @@ const router = express.Router();
  *     responses:
  *       200:
  *         description: Profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 profile:
+ *                   $ref: '#/components/schemas/Profile'
  */
 router.get(
   "/me",
@@ -40,7 +50,7 @@ router.get(
 
     // Using lean() for better performance
     const user = await User.findById(userId)
-      .select("-__v -refreshTokens -password")
+      .select("-__v -password")
       .lean()
       .exec();
 
@@ -83,7 +93,6 @@ router.get(
       id: user._id,
       name: user.name || "",
       email: user.email,
-      phoneNumber: user.phoneNumber || "",
       profilePicture: user.profilePicture || null, // Cloudinary URL
       university: user.selectedUniversity || "",
       universityId: user.universityId || null,
@@ -98,7 +107,6 @@ router.get(
       trustedContacts: trustedContacts.map((contact) => ({
         id: contact._id,
         name: contact.name,
-        phoneNumber: contact.phoneNumber,
         email: contact.email,
         relationship: contact.relationship,
         isPrimary: contact.isPrimary,
@@ -281,11 +289,17 @@ router.delete(
  * @swagger
  * /api/profile/me:
  *   put:
- *     summary: Update user profile (name, email, phone, university)
+ *     summary: Update user profile (name, email, university)
  *     description: Update user profile information (excluding profile picture - use /picture endpoint)
  *     tags: [Profile]
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/UpdateProfileRequest'
  */
 router.put(
   "/me",
@@ -294,7 +308,6 @@ router.put(
   validate([
     body("name").optional().isString().isLength({ max: 100 }),
     body("email").optional().isEmail(),
-    body("phoneNumber").optional().isString(),
     body("university").optional().isString(),
     body("universityId").optional().isString(),
     body("preferences.autoShareLocation").optional().isBoolean(),
@@ -302,8 +315,7 @@ router.put(
   ]),
   asyncHandler(async (req, res) => {
     const userId = req.userId;
-    const { name, email, phoneNumber, university, universityId, preferences } =
-      req.body;
+    const { name, email, university, universityId, preferences } = req.body;
 
     const currentUser = await User.findById(userId);
     if (!currentUser) {
@@ -329,7 +341,6 @@ router.put(
     const updateData = {};
     if (name !== undefined) updateData.name = name.trim();
     if (email !== undefined) updateData.email = email.toLowerCase().trim();
-    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber.trim();
     if (university !== undefined)
       updateData.selectedUniversity = university.trim();
     if (universityId !== undefined) updateData.universityId = universityId;
@@ -345,7 +356,7 @@ router.put(
       userId,
       { $set: updateData },
       { new: true, runValidators: true },
-    ).select("-__v -refreshTokens -password");
+    ).select("-__v -password");
 
     logger.info(`Profile updated for user ${userId}`, {
       fields: Object.keys(updateData),
@@ -378,7 +389,6 @@ router.put(
         id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
-        phoneNumber: updatedUser.phoneNumber,
         profilePicture: updatedUser.profilePicture,
         university: updatedUser.selectedUniversity,
         universityId: updatedUser.universityId,
@@ -535,8 +545,6 @@ router.get(
       timestamp: alert.createdAt,
       cancelledAt: alert.cancelledAt,
       cancellationReason: alert.cancellationReason,
-      contactsNotified: alert.contactsNotified.length,
-      recipients: alert.recipients.length,
       canCancel: alert.canCancel ? alert.canCancel() : false,
       cancellationTimeRemaining: alert.getCancellationTimeRemaining
         ? alert.getCancellationTimeRemaining()
@@ -607,8 +615,6 @@ router.get(
         timestamp: alert.createdAt,
         cancelledAt: alert.cancelledAt,
         cancellationReason: alert.cancellationReason,
-        contactsNotified: alert.contactsNotified,
-        recipients: alert.recipients,
         canCancel: alert.canCancel ? alert.canCancel() : false,
         cancellationTimeRemaining: alert.getCancellationTimeRemaining
           ? alert.getCancellationTimeRemaining()
