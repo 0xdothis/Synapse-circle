@@ -10,7 +10,6 @@ BASE_URL="http://localhost:5000"
 
 # Generate unique test user to avoid conflicts with real users
 TEST_EMAIL="thanksayo299@gmail.com"
-TEST_PHONE="+23408134490997"
 TEST_NAME="thanks ayo"
 TEST_PASSWORD="TestPass123!"
 
@@ -37,9 +36,7 @@ TESTS_PASSED=0
 TESTS_FAILED=0
 COOKIE_JAR="cookies.txt"
 
-# ============================================
 # Helper Functions
-# ============================================
 
 print_header() {
     echo ""
@@ -74,6 +71,21 @@ print_json() {
     fi
 }
 
+# Every route protected by verifyCsrfToken checks the x-csrf-token header
+# against the CURRENT csrf cookie. generateCsrfToken() is called again
+# (issuing a fresh cookie + token) on signup, login, verify-otp, and
+# refresh-token — so the token captured once at startup goes stale the
+# moment any of those run. Call this after any response that might carry
+# a fresh "csrfToken" field so CSRF_TOKEN always matches the live cookie.
+refresh_csrf_token_if_present() {
+    local response="$1"
+    local new_token
+    new_token=$(echo "$response" | grep -o '"csrfToken":"[^"]*"' | head -1 | sed 's/"csrfToken":"//;s/"//')
+    if [ -n "$new_token" ]; then
+        CSRF_TOKEN="$new_token"
+    fi
+}
+
 check_server() {
     print_header "Checking Server Status"
     echo -n "Checking if server is running... "
@@ -92,9 +104,7 @@ check_server() {
     fi
 }
 
-# ============================================
 # Create Test Image for Cloudinary
-# ============================================
 create_test_image() {
     echo -e "${BLUE}📸 Creating test image for Cloudinary...${NC}"
     
@@ -110,9 +120,7 @@ create_test_image() {
     fi
 }
 
-# ============================================
 # Run a test and track results
-# ============================================
 run_test() {
     local test_function="$1"
     local test_name="$2"
@@ -129,9 +137,7 @@ run_test() {
     fi
 }
 
-# ============================================
 # 1. HEALTH CHECK
-# ============================================
 test_health() {
     print_header "1. Health Check"
     
@@ -148,9 +154,7 @@ test_health() {
     fi
 }
 
-# ============================================
 # 2. CSRF TOKEN
-# ============================================
 test_csrf() {
     print_header "2. Get CSRF Token"
     
@@ -169,28 +173,33 @@ test_csrf() {
     fi
 }
 
-# ============================================
 # 3. SIGNUP
-# ============================================
 test_signup() {
     print_header "3. Sign Up - Create Test User"
     
     print_info "Creating user: $TEST_EMAIL"
     print_info "📧 OTP, Welcome, and Onboarding emails will be sent to this address"
     
+    # /api/auth/signup is behind verifyCsrfToken, so the x-csrf-token
+    # header (matching the cookie from step 2) is required here.
+    # phoneNumber is no longer part of the User/signup schema — sending
+    # it does nothing (express-validator ignores unknown fields), so it's
+    # dropped here to keep the script honest about what the API accepts.
     RESPONSE=$(curl -s -X POST "$API_URL/auth/signup" \
         -H "Content-Type: application/json" \
+        -H "x-csrf-token: $CSRF_TOKEN" \
         -b "$COOKIE_JAR" \
         -c "$COOKIE_JAR" \
         -d "{
             \"email\": \"$TEST_EMAIL\",
-            \"phoneNumber\": \"$TEST_PHONE\",
             \"name\": \"$TEST_NAME\",
             \"password\": \"$TEST_PASSWORD\"
         }")
     
     print_info "Response:"
     print_json "$RESPONSE"
+    
+    refresh_csrf_token_if_present "$RESPONSE"
     
     # Try to get OTP from development response
     OTP_CODE=$(echo "$RESPONSE" | grep -o '"development_otp":"[^"]*"' | sed 's/"development_otp":"//;s/"//')
@@ -213,9 +222,7 @@ test_signup() {
     fi
 }
 
-# ============================================
 # 4. VERIFY OTP
-# ============================================
 test_verify_otp() {
     print_header "4. Verify OTP"
     
@@ -231,8 +238,12 @@ test_verify_otp() {
     
     print_info "Verifying OTP: $OTP_CODE"
     
+    # /api/auth/verify-otp is also behind verifyCsrfToken — this call was
+    # previously missing the header entirely, which would fail CSRF
+    # validation against a live backend before it ever reached the OTP check.
     RESPONSE=$(curl -s -X POST "$API_URL/auth/verify-otp" \
         -H "Content-Type: application/json" \
+        -H "x-csrf-token: $CSRF_TOKEN" \
         -b "$COOKIE_JAR" \
         -c "$COOKIE_JAR" \
         -d "{
@@ -243,12 +254,22 @@ test_verify_otp() {
     print_info "Response:"
     print_json "$RESPONSE"
     
-    ACCESS_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | sed 's/"token":"//;s/"//')
+    refresh_csrf_token_if_present "$RESPONSE"
+    
+    # NOTE: the server only puts accessToken/refreshToken in the JSON body
+    # for mobile clients (X-Client-Type: mobile). This script never sends
+    # that header, so on a real server these will stay empty and auth
+    # rides entirely on the httpOnly cookie in $COOKIE_JAR — the
+    # Authorization: Bearer $ACCESS_TOKEN headers sent later are inert.
+    # That's fine functionally (cookie auth still works) but if you want
+    # to actually exercise the mobile/Bearer-token path, add
+    # -H "X-Client-Type: mobile" here and to login/refresh-token below.
+    ACCESS_TOKEN=$(echo "$RESPONSE" | grep -o '"accessToken":"[^"]*"' | head -1 | sed 's/"accessToken":"//;s/"//')
     REFRESH_TOKEN=$(echo "$RESPONSE" | grep -o '"refreshToken":"[^"]*"' | head -1 | sed 's/"refreshToken":"//;s/"//')
     USER_ID=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | head -1 | sed 's/"id":"//;s/"//')
     
-    if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
-        print_success "OTP verified! Token obtained"
+    if echo "$RESPONSE" | grep -q '"success":true'; then
+        print_success "OTP verified! Session established (cookie-based unless X-Client-Type: mobile is set)"
         print_info "📧 Welcome email should have been sent to: $TEST_EMAIL"
         return 0
     else
@@ -257,9 +278,7 @@ test_verify_otp() {
     fi
 }
 
-# ============================================
 # 5. LOGIN
-# ============================================
 test_login() {
     print_header "5. Login"
     
@@ -278,10 +297,12 @@ test_login() {
     print_info "Response:"
     print_json "$RESPONSE"
     
-    ACCESS_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | sed 's/"token":"//;s/"//')
+    refresh_csrf_token_if_present "$RESPONSE"
+    
+    ACCESS_TOKEN=$(echo "$RESPONSE" | grep -o '"accessToken":"[^"]*"' | head -1 | sed 's/"accessToken":"//;s/"//')
     REFRESH_TOKEN=$(echo "$RESPONSE" | grep -o '"refreshToken":"[^"]*"' | head -1 | sed 's/"refreshToken":"//;s/"//')
     
-    if [ -n "$ACCESS_TOKEN" ] && [ "$ACCESS_TOKEN" != "null" ]; then
+    if echo "$RESPONSE" | grep -q '"success":true'; then
         print_success "Login successful!"
         return 0
     else
@@ -290,9 +311,7 @@ test_login() {
     fi
 }
 
-# ============================================
 # 6. GET USER PROFILE
-# ============================================
 test_get_profile() {
     print_header "6. Get User Profile (Auth/me)"
     
@@ -406,7 +425,7 @@ test_update_email() {
     print_info "Updating email..."
     
     # Generate a unique temporary email for testing
-    TEMP_EMAIL="temp.${TIMESTAMP}.${RANDOM_SUFFIX}@test.com"
+    TEMP_EMAIL="temp.$(date +%s).${RANDOM}@test.com"
     
     RESPONSE=$(curl -s -X PUT "$API_URL/profile/email" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -490,7 +509,6 @@ test_upload_profile_picture() {
     create_test_image || return 1
     
     print_info "Uploading profile picture to Cloudinary..."
-    print_info "📤 Sending image to Cloudinary (retydtgye cloud)"
     
     RESPONSE=$(curl -s -X POST "$API_URL/profile/picture" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
@@ -510,7 +528,6 @@ test_upload_profile_picture() {
     else
         print_warning "Profile picture upload failed or Cloudinary not configured"
         print_info "Check that Cloudinary credentials are correct in .env"
-        print_info "CLOUDINARY_CLOUD_NAME=retydtgye"
         return 0
     fi
 }
@@ -570,6 +587,11 @@ test_onboarding_status() {
 # ============================================
 # 8. UPDATE ONBOARDING STEP
 # ============================================
+# NOTE: step order is now welcome -> location -> contacts -> university ->
+# complete (contacts moved earlier so trusted/emergency contacts are set
+# up right after location, before picking a university). This test only
+# advances to "location", so it's unaffected by the reorder — it's still
+# a valid single forward step from "welcome".
 test_update_onboarding() {
     print_header "8. Update Onboarding Step"
     
@@ -606,6 +628,8 @@ test_update_onboarding() {
 test_add_contact() {
     print_header "9. Add Trusted Contact"
     
+    # phoneNumber removed — TrustedContact has no such field; alerts to
+    # trusted contacts are email-only.
     RESPONSE=$(curl -s -X POST "$API_URL/contacts" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
@@ -613,7 +637,6 @@ test_add_contact() {
         -b "$COOKIE_JAR" \
         -d '{
             "name": "Jane Doe",
-            "phoneNumber": "+1234567891",
             "email": "jane.doe@example.com",
             "relationship": "friend"
         }')
@@ -714,6 +737,7 @@ test_sos_with_auth() {
     print_info "Triggering SOS alert..."
     print_info "📧 SOS confirmation email will be sent to: $TEST_EMAIL"
     
+    # /api/sos/trigger does not require CSRF (no verifyCsrfToken on this route).
     RESPONSE=$(curl -s -X POST "$API_URL/sos/trigger" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
@@ -809,6 +833,7 @@ test_cancel_sos() {
     
     print_info "Cancelling alert: $ALERT_ID"
     
+    # /api/sos/cancel/:alertId does not require CSRF either.
     RESPONSE=$(curl -s -X POST "$API_URL/sos/cancel/$ALERT_ID" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
         -H "Content-Type: application/json" \
@@ -922,8 +947,12 @@ test_delete_contact() {
     
     print_info "Deleting contact: $CONTACT_ID"
     
+    # /api/contacts/:contactId DELETE is behind verifyCsrfToken too — this
+    # call was previously missing the header, same class of gap as signup
+    # and verify-otp above.
     RESPONSE=$(curl -s -X DELETE "$API_URL/contacts/$CONTACT_ID" \
         -H "Authorization: Bearer $ACCESS_TOKEN" \
+        -H "x-csrf-token: $CSRF_TOKEN" \
         -b "$COOKIE_JAR")
     
     print_info "Response:"
@@ -939,7 +968,7 @@ test_delete_contact() {
 }
 
 # ============================================
-# 21. REFRESH TOKEN TEST (FIXED)
+# 21. REFRESH TOKEN TEST
 # ============================================
 test_refresh_token() {
     print_header "21. Test Refresh Token"
@@ -956,9 +985,11 @@ test_refresh_token() {
     print_info "Response:"
     print_json "$RESPONSE"
     
+    refresh_csrf_token_if_present "$RESPONSE"
+    
     if echo "$RESPONSE" | grep -q '"success":true'; then
         print_success "Token refreshed successfully!"
-        NEW_TOKEN=$(echo "$RESPONSE" | grep -o '"token":"[^"]*"' | head -1 | sed 's/"token":"//;s/"//')
+        NEW_TOKEN=$(echo "$RESPONSE" | grep -o '"accessToken":"[^"]*"' | head -1 | sed 's/"accessToken":"//;s/"//')
         if [ -n "$NEW_TOKEN" ] && [ "$NEW_TOKEN" != "null" ]; then
             ACCESS_TOKEN="$NEW_TOKEN"
             print_info "New access token obtained: ${ACCESS_TOKEN:0:20}..."
@@ -1040,7 +1071,6 @@ main() {
     echo "   API URL: $API_URL"
     echo "   Test Email: $TEST_EMAIL"
     echo "   Test User: $TEST_NAME"
-    echo "   Test Phone: $TEST_PHONE"
     echo ""
     echo "📧 Email Notifications:"
     echo "   - OTP email will be sent to $TEST_EMAIL"
@@ -1165,7 +1195,6 @@ main() {
         echo "   URL: ${PROFILE_PICTURE_URL:0:60}..."
     else
         echo -e "${YELLOW}⚠️ No profile picture uploaded${NC}"
-        echo "   Cloudinary configured at: retydtgye"
         echo "   Check server logs for upload errors"
     fi
     echo ""

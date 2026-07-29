@@ -40,37 +40,44 @@ export const createSession = async (
 };
 
 /**
- * Verify + rotate a refresh token. Returns one of:
- *   { accessToken, refreshToken, userId }  — success
- *   { error: "INVALID" }                   — bad signature/expired/unknown
- *   { error: "REUSED", userId }            — token was already rotated once
- *                                             before (likely stolen) — every
- *                                             session for this user has been
- *                                             revoked as a precaution.
+ * Verify + rotate a refresh token.
  */
 export const rotateSession = async (refreshToken, meta = {}) => {
   const decoded = verifyRefreshToken(refreshToken);
   if (!decoded?.jti) return { error: "INVALID" };
 
-  const record = await RefreshToken.findOne({ jti: decoded.jti });
-  if (!record || record.tokenHash !== hashToken(refreshToken)) {
-    return { error: "INVALID" };
-  }
+  const tokenHash = hashToken(refreshToken);
 
-  if (record.expiresAt < new Date()) {
-    return { error: "INVALID" };
-  }
-
-  if (record.revokedAt) {
-    logger.warn("Refresh token reuse detected — revoking all sessions", {
-      userId: decoded.userId,
+  const record = await RefreshToken.findOneAndUpdate(
+    {
       jti: decoded.jti,
+      tokenHash,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() },
+    },
+    { revokedAt: new Date() },
+    { new: false },
+  );
+
+  if (!record) {
+    const existing = await RefreshToken.findOne({
+      jti: decoded.jti,
+      tokenHash,
     });
-    await RefreshToken.updateMany(
-      { userId: decoded.userId, revokedAt: null },
-      { revokedAt: new Date() },
-    );
-    return { error: "REUSED", userId: decoded.userId };
+
+    if (existing?.revokedAt) {
+      logger.warn("Refresh token reuse detected — revoking all sessions", {
+        userId: existing.userId,
+        jti: decoded.jti,
+      });
+      await RefreshToken.updateMany(
+        { userId: existing.userId, revokedAt: null },
+        { revokedAt: new Date() },
+      );
+      return { error: "REUSED", userId: existing.userId };
+    }
+
+    return { error: "INVALID" };
   }
 
   const { accessToken, refreshToken: newRefreshToken } = await createSession(
@@ -79,9 +86,6 @@ export const rotateSession = async (refreshToken, meta = {}) => {
     decoded.role,
     meta,
   );
-
-  record.revokedAt = new Date();
-  await record.save();
 
   return { accessToken, refreshToken: newRefreshToken, userId: decoded.userId };
 };

@@ -39,8 +39,9 @@ const router = express.Router();
 const googleClient = new OAuth2Client(config.googleClientId);
 
 /**
- * Web clients (no X-Client-Type: mobile) receive tokens only in httpOnly cookies—never in the JSON body.
- * Mobile clients get tokens in the JSON response body, as they cannot securely store httpOnly cookies.
+ * Session response strategy
+ * Web clients (browser, no `X-Client-Type: mobile` header): tokens are
+ * NEVER placed in the JSON body. They live only in httpOnly cookies.
  */
 const respondWithSession = async (
   req,
@@ -93,8 +94,8 @@ const resolveGoogleUser = async (payload) => {
   }
 
   /**
-   * Only auto-link if Google confirms the email never trust a string match alone.
-   * Unverified emails create new accounts; a duplicate email triggers a 409 instead of takeover.
+   * If the Google account's email is verified, we can link it to an existing account with the same email.
+   * If the email is not verified, we cannot trust it and must create a new account.
    */
   if (email_verified) {
     user = await User.findOne({ email });
@@ -124,8 +125,8 @@ const resolveGoogleUser = async (payload) => {
 const STEP_ORDER = [
   "welcome",
   "location",
-  "university",
   "contacts",
+  "university",
   "complete",
 ];
 
@@ -235,10 +236,6 @@ const handleOnboardingComplete = async (user) => {
   }
 };
 
-/**
- * Single source of truth for the "user" object
- * returned across every auth route (login, verify-otp, google, onboarding, refresh).
- */
 const buildUserResponse = (user) => {
   const response = {
     id: user._id,
@@ -434,8 +431,7 @@ const validateSignupInput = (email, password) => {
 };
 
 /**
- * Look up whether this email is already in use and decide whether the
- * signup can proceed.
+ * Look up whether this email is already in use
  */
 const resolveSignupAccount = async (email) => {
   const existingByEmail = await User.findOne({ email });
@@ -1355,8 +1351,8 @@ router.get(
       const stepLabels = {
         welcome: "Welcome & Profile",
         location: "Location Settings",
-        university: "University Selection",
         contacts: "Add Contacts",
+        university: "University Selection",
         complete: "Complete",
       };
 
@@ -1675,7 +1671,7 @@ router.post(
 
       const result = await emailService.verifyPasswordResetOTP(email, otpCode);
 
-      // Distinct-purpose, short-lived token. Reusing config.jwtSecret is acceptable
+      // Distinct-purpose, short-lived token
       const resetToken = jwt.sign(
         {
           userId: result.user._id,
@@ -1992,7 +1988,7 @@ router.post(
       user.lastPasswordChange = new Date();
       await user.save();
 
-      // Revoke every outstanding session (web cookies AND any mobile tokens) so that the user must log in again with the new password.
+      // Revoke every outstanding session
       await revokeAllSessions(user._id);
       clearTokenCookies(res);
 

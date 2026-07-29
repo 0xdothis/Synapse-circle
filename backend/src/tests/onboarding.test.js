@@ -111,13 +111,27 @@ describe("Onboarding API Tests", () => {
       expect(response.body).toHaveProperty("canGoForward", true);
       expect(response.body).toHaveProperty("canGoBack", true);
       expect(response.body).toHaveProperty("previousStep", "welcome");
-      expect(response.body).toHaveProperty("nextStep", "university");
+      expect(response.body).toHaveProperty("nextStep", "contacts");
 
       const user = await User.findById(userId);
       expect(user.onboardingStep).toBe("location");
     });
 
     it("should update onboarding step to university", async () => {
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Cookie", authData.cookies)
+        .set("x-csrf-token", authData.csrfToken)
+        .send({ step: "location" })
+        .expect(200);
+
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Cookie", authData.cookies)
+        .set("x-csrf-token", authData.csrfToken)
+        .send({ step: "contacts" })
+        .expect(200);
+
       const response = await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Cookie", authData.cookies)
@@ -127,11 +141,11 @@ describe("Onboarding API Tests", () => {
 
       expect(response.body).toHaveProperty("success", true);
       expect(response.body).toHaveProperty("step", "university");
-      expect(response.body).toHaveProperty("progress", 60);
+      expect(response.body).toHaveProperty("progress", 80);
       expect(response.body).toHaveProperty("canGoForward", true);
       expect(response.body).toHaveProperty("canGoBack", true);
-      expect(response.body).toHaveProperty("previousStep", "location");
-      expect(response.body).toHaveProperty("nextStep", "contacts");
+      expect(response.body).toHaveProperty("previousStep", "contacts");
+      expect(response.body).toHaveProperty("nextStep", "complete");
     });
 
     it("should update onboarding step to contacts", async () => {
@@ -144,11 +158,11 @@ describe("Onboarding API Tests", () => {
 
       expect(response.body).toHaveProperty("success", true);
       expect(response.body).toHaveProperty("step", "contacts");
-      expect(response.body).toHaveProperty("progress", 80);
+      expect(response.body).toHaveProperty("progress", 60);
       expect(response.body).toHaveProperty("canGoForward", true);
       expect(response.body).toHaveProperty("canGoBack", true);
-      expect(response.body).toHaveProperty("previousStep", "university");
-      expect(response.body).toHaveProperty("nextStep", "complete");
+      expect(response.body).toHaveProperty("previousStep", "location");
+      expect(response.body).toHaveProperty("nextStep", "university");
 
       expect(response.body).toHaveProperty("contacts");
       expect(response.body.contacts).toHaveProperty("count", 0);
@@ -213,14 +227,14 @@ describe("Onboarding API Tests", () => {
         .patch("/api/auth/onboarding-step")
         .set("Cookie", authData.cookies)
         .set("x-csrf-token", authData.csrfToken)
-        .send({ step: "university" })
+        .send({ step: "contacts" })
         .expect(200);
 
       await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Cookie", authData.cookies)
         .set("x-csrf-token", authData.csrfToken)
-        .send({ step: "contacts" })
+        .send({ step: "university" })
         .expect(200);
 
       const response = await request(app)
@@ -242,7 +256,7 @@ describe("Onboarding API Tests", () => {
     it("should allow completing onboarding with contacts", async () => {
       await User.findByIdAndUpdate(userId, { onboardingStep: "welcome" });
 
-      const steps = ["location", "university", "contacts"];
+      const steps = ["location", "contacts", "university"];
       for (const step of steps) {
         await request(app)
           .patch("/api/auth/onboarding-step")
@@ -272,7 +286,7 @@ describe("Onboarding API Tests", () => {
       expect(response.body).toHaveProperty("progress", 100);
       expect(response.body).toHaveProperty("canGoForward", false);
       expect(response.body).toHaveProperty("canGoBack", true);
-      expect(response.body).toHaveProperty("previousStep", "contacts");
+      expect(response.body).toHaveProperty("previousStep", "university");
       expect(response.body).toHaveProperty("nextStep", null);
 
       const user = await User.findById(userId);
@@ -293,6 +307,13 @@ describe("Onboarding API Tests", () => {
         .set("Cookie", authData.cookies)
         .set("x-csrf-token", authData.csrfToken)
         .send({ step: "location" })
+        .expect(200);
+
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Cookie", authData.cookies)
+        .set("x-csrf-token", authData.csrfToken)
+        .send({ step: "contacts" })
         .expect(200);
 
       const universityId = "507f1f77bcf86cd799439011";
@@ -428,13 +449,6 @@ describe("Onboarding API Tests", () => {
         .send({ step: "location" })
         .expect(200);
 
-      await request(app)
-        .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
-        .send({ step: "university" })
-        .expect(200);
-
       await TrustedContact.create({
         userId: userId,
         name: "Another Contact",
@@ -455,6 +469,13 @@ describe("Onboarding API Tests", () => {
       expect(response.body).toHaveProperty("contacts");
       expect(response.body.contacts).toHaveProperty("count", 1);
       expect(response.body.contacts).toHaveProperty("maxContacts", 3);
+
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Cookie", authData.cookies)
+        .set("x-csrf-token", authData.csrfToken)
+        .send({ step: "university" })
+        .expect(200);
     });
 
     it("should handle data validation for invalid data type", async () => {
@@ -521,13 +542,13 @@ describe("Onboarding API Tests", () => {
         .patch("/api/auth/onboarding-step")
         .set("Cookie", authData.cookies)
         .set("x-csrf-token", authData.csrfToken)
-        .send({ step: "university" });
+        .send({ step: "contacts" });
 
       await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Cookie", authData.cookies)
         .set("x-csrf-token", authData.csrfToken)
-        .send({ step: "contacts" });
+        .send({ step: "university" });
 
       await TrustedContact.create({
         userId: userId,
