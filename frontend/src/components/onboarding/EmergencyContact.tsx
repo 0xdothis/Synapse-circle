@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/utils";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
 
 const items = [
   { label: "Select Relationship", value: null },
@@ -27,40 +28,46 @@ const items = [
 
 export interface EmergencyContactStateProps {
   name: string;
-  phone: string;
+  phoneNumber: string;
   email: string;
   relationship: string | null;
 }
 
 interface EmergencyContactProps {
   index: number;
-  onChange: Function;
 }
 
-function EmergencyContact({ index, onChange }: EmergencyContactProps) {
-  const [contact, setContact] = React.useState<EmergencyContactStateProps>({ name: "", email: "", phone: "", relationship: null });
+function EmergencyContact({ index }: EmergencyContactProps) {
+  const contact = useOnboardingStore(state => state.onboardingData.contacts[index])
+
+  const handleContactChange = useOnboardingStore(state => state.handleContactChange);
   const [touched, setTouched] = React.useState(false)
   const isInvalid = touched && contact.relationship === null
 
   const handleChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const { id, value } = e.target;
 
-    setContact((prev) => ({ ...prev, [id]: value }))
+    if (!contact) return;
+
+    handleContactChange(index, {
+      ...contact,
+      [id]: value
+    })
   }
 
 
-  function handleChangeRelationship(id: keyof EmergencyContactStateProps) {
-    return (value: string | null) => {
-      setContact((prev) => ({ ...prev, [id]: value ?? null }))
-      setTouched(true)
-    }
+  function handleChangeRelationship(value: string | null) {
+    if (!contact) return;
+    setTouched(true)
+
+    handleContactChange(index, {
+      ...contact,
+      relationship: value ?? null
+    })
+
   }
 
-  console.log(touched, isInvalid)
 
-  React.useEffect(() => {
-    onChange(index, contact);
-  }, [contact])
 
   return (
     <FieldSet className="w-full">
@@ -72,7 +79,7 @@ function EmergencyContact({ index, onChange }: EmergencyContactProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor={`phone-${index}`}>Phone Number <small className="text-error text-sm">*</small></FieldLabel>
-          <Input id="phone" type="tel" placeholder="Enter a valid mobile number" value={contact.phone} onChange={handleChange} pattern="^\+?[1-9]?\d{1,14}$" required />
+          <Input id="phoneNumber" type="tel" placeholder="Enter a valid mobile number" value={contact.phoneNumber} onChange={handleChange} pattern="^\+?[1-9]?\d{1,14}$" required />
         </Field>
         <Field>
           <FieldLabel htmlFor={`email-${index}`}>Email Address <small className="text-error text-sm">*</small></FieldLabel>
@@ -81,7 +88,7 @@ function EmergencyContact({ index, onChange }: EmergencyContactProps) {
         <Field>
           <FieldLabel htmlFor={`relationship-${index}`}>Relationship<small className="text-error text-sm">*</small></FieldLabel>
 
-          <Select id="relationship" items={items} required onValueChange={handleChangeRelationship("relationship")}>
+          <Select id="relationship" items={items} required onValueChange={handleChangeRelationship} value={contact.relationship || null}>
             <SelectTrigger className={cn("w-full",
               `${isInvalid && "border-error ring-2 ring-error/20"}`,
               `${touched && contact.relationship !== null && "border-success"}`)}>
