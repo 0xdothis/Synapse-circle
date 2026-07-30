@@ -180,7 +180,6 @@ export const triggerSOS = async (sosData: {latitude: number, longitude: number, 
 
   const res = await fetch("https://synap-circle.onrender.com/api/sos/trigger", {
         method: "POST",
-        credentials: "include",
         headers: {
             "Content-Type": "application/json",
              "x-csrf-token": `${token.state.authToken}`
