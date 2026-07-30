@@ -7,7 +7,7 @@ import MixpanelProvider from './components/MixpanelProvider'
 
 function App() {
   return (
-    <main className="font-sans bg-neutral-50 min-h-screen lg:h-screen lg:overflow-hidden flex flex-col">
+    <main className="font-sans bg-neutral-50 min-h-screen lg:h-screen flex flex-col">
 
       <section className='max-w-360 mx-auto w-full flex flex-1 flex-col lg:min-h-0'>
         <MixpanelProvider router={router} >
