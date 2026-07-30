@@ -6,13 +6,36 @@ import { useNavigate } from "react-router";
 import { Spinner } from "@/components/Loader";
 import Modal from "@/components/onboarding/Modal";
 import { DialogClose } from "@/components/ui/dialog";
+import { useMutation } from "@tanstack/react-query";
+import { onboardingRegistration } from "@/utils/safewalkFn";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import Loader from "@/components/Loader"
 
 
 
 function Location() {
 
-  const { permissionStatus, getLocation, loading } = useLocation();
+  const { permissionStatus, getLocation, location } = useLocation();
   const navigate = useNavigate()
+  const userLocation = useOnboardingStore(state => state.onboardingData.location);
+  const updateLocation = useOnboardingStore(state => state.updateLocation)
+
+  const { isPending, mutate } = useMutation({
+    mutationFn: onboardingRegistration,
+    onSuccess: (data) => {
+
+      console.log(data)
+
+      if (permissionStatus === "granted") {
+
+        navigate("/onboarding/trusted-contact")
+      }
+
+    },
+    onError: (err) => {
+      console.log(err)
+    }
+  })
 
   // Determine button text safely based on permission state
   const getButtonText = (() => {
@@ -21,15 +44,34 @@ function Location() {
     return 'Allow Location Access';
   })();
 
+
   function handleLocation() {
 
     getLocation();
 
-    if (permissionStatus === "granted") {
-      navigate("/onboarding/trusted-contact")
+    if (!location) {
+      return;
     }
 
+    updateLocation({ latitude: location.lat, longitude: location.lng });
+
+    if (!userLocation) {
+      console.log('USER LOCATION', userLocation)
+      return;
+    }
+
+
+    const data = {
+      step: "location",
+      data: {
+        location: userLocation
+      }
+    }
+
+    mutate(data)
   }
+
+  if (isPending) <Loader heading="Location Access" description="We are accessing your location kindly wait" />
 
 
   return (
@@ -47,7 +89,7 @@ function Location() {
         getButtonText === "Allow Location Access" && Location06Icon ||
         LocationCheck02Icon}>
 
-      <Button onClick={handleLocation} className=""> {loading ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
+      <Button onClick={handleLocation} className=""> {isPending ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
       {getButtonText === "Continue" ? undefined : <Modal trigger="Not Now" icon={AlertIcon} title="Are you sure?" description="Enable location access to share your real-time location with trusted contacts during emergencies.">
         <DialogClose render={<Button variant="ghost" onClick={() => navigate("/onboarding/trusted-contact")}>Continue Without Location</Button>} />
 

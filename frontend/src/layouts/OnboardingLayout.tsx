@@ -9,6 +9,7 @@ function OnboardingLayout() {
   const navigate = useNavigate()
   const location = useLocation()
 
+
   const currentSubPath: string =
     location.pathname.split("/onboarding")[1]?.replace(/^\//, "") || "welcome"
 
@@ -26,16 +27,14 @@ function OnboardingLayout() {
   const totalSteps = ["location", "trusted-contact", "school-info"]
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row">
+    <div className="h-screen lg:h-full lg:min-h-0 flex flex-col lg:flex-row lg:overflow-hidden">
 
-      <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:items-center lg:justify-center bg-primary bg-[url('/doodles-onboarding.png')] bg-cover bg-center bg-no-repeat relative overflow-hidden shrink-0">
-
-
-      </div>
+      <div className="hidden lg:flex lg:w-1/2 lg:flex-col lg:items-center lg:justify-center bg-primary bg-[url('/doodles-onboarding.png')] bg-cover bg-center bg-no-repeat relative shrink-0 lg:overflow-hidden" />
 
 
-      <section className="flex-1 flex flex-col px-4 py-8 lg:items-center lg:justify-center">
-        <div className="w-full h-full flex flex-1 flex-col lg:max-w-125 lg:shadow-lg lg:rounded-2xl lg:p-8">
+
+      <section className="flex-1 flex flex-col px-4 py-8 lg:items-center lg:justify-center min-h-0 lg:overflow-y-auto">
+        <div className="w-full flex flex-1 flex-col lg:max-w-125 lg:shadow-lg lg:rounded-2xl lg:p-8">
           <div className="flex justify-between items-center lg:-mx-4">
             <Button onClick={() => navigate(-1)} variant="ghost" size="sm">
               <HugeiconsIcon icon={ArrowLeft02Icon} /> Back

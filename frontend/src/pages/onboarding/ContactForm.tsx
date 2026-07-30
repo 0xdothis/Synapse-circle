@@ -1,9 +1,8 @@
-//import { useNavigate } from "react-router";
-import EmergencyContact, { type EmergencyContactStateProps } from "@/components/onboarding/EmergencyContact";
+import EmergencyContact from "@/components/onboarding/EmergencyContact";
 import Button from "@/components/ui/button"
-import { Add01Icon, Trash2 } from "@hugeicons/core-free-icons";
+import { useOnboardingStore } from "@/store/useOnboardingStore";
+import { Add01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import React from "react";
 import { useNavigate } from "react-router";
 
 
@@ -11,33 +10,11 @@ import { useNavigate } from "react-router";
 function ContactForm() {
 
   const navigate = useNavigate()
-  const [contacts, setContacts] = React.useState<EmergencyContactStateProps[]>([
-    { name: "", email: "", phone: "", relationship: "" }
-  ])
 
+  const contacts = useOnboardingStore(state => state.onboardingData.contacts)
+  const addContactSlot = useOnboardingStore((state) => state.addContactSlot)
+  const removeContactSlot = useOnboardingStore(state => state.removeContactSlot)
 
-
-
-  const handleContactChange = (index: number, updatedContact: EmergencyContactStateProps) => {
-    setContacts(prev => {
-      const newContacts = [...prev]
-      newContacts[index] = updatedContact
-
-      return newContacts;
-    })
-  }
-
-  const addContactSlot = () => {
-    setContacts((prev) => [...prev, { name: "", email: "", phone: "", relationship: "" }
-    ])
-  }
-
-  const removeContactSlot = (indexToRemove: number) => {
-    if (contacts.length > 1) {
-      setContacts(prev => prev.filter((_, index) => index !== indexToRemove))
-    }
-
-  }
 
   return (
     <div className="mt-6">
@@ -47,17 +24,18 @@ function ContactForm() {
       </div>
       <form className="space-y-6">
         {contacts.map((_, index) => (
-          <div key={index} className="space-y-4">
-            <EmergencyContact index={index} onChange={handleContactChange} />
-            {contacts.length > 1 && <Button type="button" onClick={() => removeContactSlot(index)} variant="destructive" size="sm" className="rounded-lg h-12 w-12 p-0 active:bg-error focus:bg-error">
-              <HugeiconsIcon icon={Trash2} strokeWidth={2} size={30} />
-            </Button>}
+          <div key={index} className="space-y-4 flex flex-col">
+            {contacts.length > 1 && <a onClick={() => removeContactSlot(index)} className="rounded-lg h-12 w-12 p-0 text-error cursor-pointer self-end relative top-15 right-5">
+              Remove
+            </a>}
+
+            <EmergencyContact index={index} />
           </div>
         ))}
 
         <div className="space-y-8">
 
-          <Button type="button" onClick={addContactSlot} className="border border-brand-500 border-dashed bg-neutral-50 text-brand-500 gap-2 w-full active:bg-neutral-50 focus:bg-neutral-50"><HugeiconsIcon icon={Add01Icon} size={20} /> Add another contact</Button>
+          <Button type="button" onClick={addContactSlot} className="border border-brand-500 border-dashed bg-neutral-50 text-brand-500 gap-2 w-full active:bg-neutral-50 hover:bg-transparent  hover:text-brand-700 focus:bg-neutral-50"><HugeiconsIcon icon={Add01Icon} size={20} /> Add another contact</Button>
 
           <Button className="w-full" onClick={() => navigate("/onboarding/school-info")}>Continue</Button>
         </div>

@@ -1,8 +1,20 @@
 import React from "react"
 import AuthForm from "../AuthForm";
-import { identifyUser, trackEvent } from "@/lib/mixpanelClient";
-import type { UserDataProps } from "./signup";
+import { trackEvent } from "@/lib/mixpanelClient";
 import { useNavigate } from "react-router";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+
+} from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { Eye } from "@hugeicons/core-free-icons"
+import { useMutation } from "@tanstack/react-query";
+import { login } from "@/utils/safewalkFn";
+import Loader from "@/components/Loader";
+import { useAuthStore } from "@/store/useAuthStore";
+
 
 export interface LoginCredentials {
   email: string;
@@ -12,8 +24,37 @@ export interface LoginCredentials {
 function Signin() {
 
   const [user, setUser] = React.useState<LoginCredentials>({ email: "", password: "" })
-  const [state, setState] = React.useState<"idle" | "loading" | "success">("idle")
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const authLogin = useAuthStore(state => state.login)
+
+
+  const isValid = !user.email.trim() || !user.password.trim();
+
+  const { isPending, mutate, error } = useMutation({
+    mutationFn: login,
+    onSuccess: (data) => {
+
+      if (!data.success) {
+        console.log(data.message || "login failed");
+        return;
+      }
+
+      const authToken = data.csrfToken
+
+      if (authToken) {
+        authLogin(authToken)
+      }
+
+
+      trackEvent("login_completed")
+      navigate("/dashboard")
+
+    },
+    onError: (err) => {
+      console.log("[ERROR]", err)
+    }
+
+  })
 
   const handleChange: React.ChangeEventHandler<HTMLInputElement> = (e) => {
     const { id, value, } = e.target;
@@ -24,55 +65,35 @@ function Signin() {
   const handleSubmit: React.SubmitEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
 
-    setState("loading")
+    trackEvent("login_started")
 
-    trackEvent("login_submitted")
+    console.log("HANDLE LOGIN", error?.message)
 
-    const userData: LoginCredentials = user;
+    mutate(user)
 
-    const tokenReq = await fetch(`https://synap-circle.onrender.com/api/auth/csrf-token`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json"
-      }
-    })
+  }
 
-    const token = await tokenReq.json();
-
-
-    const res = await fetch(`https://synap-circle.onrender.com/api/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": `${token?.csrfToken}`
-      },
-      body: JSON.stringify(userData)
-    })
-
-
-
-    const data = await res.json();
-
-    if (!data.success) {
-      alert("Something went wrong");
-      setState("idle")
-      return;
-    }
-
-    setUser({ email: "", password: "" })
-
-    identifyUser(data?.email)
-
-    trackEvent("login_completed");
-
-    setState("idle")
-    navigate("/dasboard")
-
+  if (isPending) {
+    return <Loader heading="Welcome Back" description="Redirection to SafeWalk Campus" />
   }
 
 
 
-  return <AuthForm title="Welcome Back" description="Log in to continue." CTA="Log in" onChange={handleChange} onSubmit={handleSubmit} userInfo={user as UserDataProps} state={state} />
+  return <AuthForm title="Welcome Back" description="Log in to continue." CTA="Log in" onSubmit={handleSubmit} isValid={isValid}>
+    <FieldGroup className="mt-8">
+      <Field>
+        <FieldLabel htmlFor="email">Email Address <small className="text-error text-sm">*</small></FieldLabel>
+        <Input id="email" type="email" placeholder="sample@email.com" value={user.email} onChange={handleChange} required />
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="password">Password <small className="text-error text-sm">*</small></FieldLabel>
+        <Input id="password" type="password" placeholder="Min. 8 characters" value={user.password} onChange={handleChange} required endIcon={Eye} min={8} />
+      </Field>
+
+    </FieldGroup>
+
+    <a href="/auth/reset-password" className="text-xs self-end w-fit  text-right text-neutral-500">Forgot Password</a>
+  </AuthForm>
 }
 
 export default Signin
