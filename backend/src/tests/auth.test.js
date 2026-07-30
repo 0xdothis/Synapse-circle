@@ -7,7 +7,6 @@ import { getAuthToken, clearAuthCache } from "./helpers/authHelper.js";
 describe("Authentication API Tests", () => {
   const testUser = {
     email: "test@campus.edu",
-    phoneNumber: "+1234567890",
     name: "Test User",
     password: "TestPassword123",
   };
@@ -19,9 +18,14 @@ describe("Authentication API Tests", () => {
 
   describe("POST /api/auth/signup", () => {
     it("should send OTP to email for signup", async () => {
+      // Use a unique email for this test to avoid conflicts
+      const uniqueEmail = `test-signup-${Date.now()}@campus.edu`;
       const response = await request(app)
         .post("/api/auth/signup")
-        .send(testUser)
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -32,17 +36,15 @@ describe("Authentication API Tests", () => {
       expect(response.body).toHaveProperty("development_otp");
 
       // Verify OTP was saved in database
-      const otp = await OTP.findOne({ email: testUser.email });
+      const otp = await OTP.findOne({ email: uniqueEmail });
       expect(otp).toBeTruthy();
-      expect(otp.email).toBe(testUser.email);
-      expect(otp.phoneNumber).toBe(testUser.phoneNumber);
+      expect(otp.email).toBe(uniqueEmail);
     });
 
     it("should return error for missing email", async () => {
       const response = await request(app)
         .post("/api/auth/signup")
         .send({
-          phoneNumber: "+1234567890",
           password: "TestPassword123",
         })
         .expect(400);
@@ -59,7 +61,6 @@ describe("Authentication API Tests", () => {
         .post("/api/auth/signup")
         .send({
           email: "invalid-email",
-          phoneNumber: "+1234567890",
           password: "TestPassword123",
         })
         .expect(400);
@@ -69,37 +70,73 @@ describe("Authentication API Tests", () => {
       expect(response.body.errors[0].field).toBe("email");
     });
 
-    it("should return error for duplicate email", async () => {
-      await request(app).post("/api/auth/signup").send(testUser);
-
-      // Second signup with same email
-      const response = await request(app)
+    it("should reuse unverified account and send new OTP for duplicate email", async () => {
+      // First signup - creates an unverified account
+      const uniqueEmail = `test-reuse-${Date.now()}@campus.edu`;
+      const firstResponse = await request(app)
         .post("/api/auth/signup")
         .send({
-          email: testUser.email,
-          phoneNumber: "+1987654321",
+          ...testUser,
+          email: uniqueEmail,
+        })
+        .expect(200);
+
+      const firstOtp = firstResponse.body.development_otp;
+      expect(firstOtp).toBeTruthy();
+
+      // Second signup with same email - should reuse the unverified account
+      const secondResponse = await request(app)
+        .post("/api/auth/signup")
+        .send({
+          email: uniqueEmail,
           name: "Another User",
           password: "TestPassword123",
         })
-        .expect(400);
+        .expect(200);
 
-      expect(response.body).toHaveProperty("success", false);
-      expect(response.body).toHaveProperty(
+      expect(secondResponse.body).toHaveProperty("success", true);
+      expect(secondResponse.body).toHaveProperty(
         "message",
-        "Email already registered. Please use a different email.",
+        "OTP sent successfully to your email",
       );
+      expect(secondResponse.body).toHaveProperty("development_otp");
+
+      // The new OTP should be different from the first one
+      expect(secondResponse.body.development_otp).not.toBe(firstOtp);
+
+      // Verify the user still exists and is still unverified
+      const user = await User.findOne({ email: uniqueEmail });
+      expect(user).toBeTruthy();
+      expect(user.isVerified).toBe(false);
     });
 
-    it("should return error for duplicate phone number", async () => {
+    it("should return error when trying to sign up with email of a verified account", async () => {
+      const uniqueEmail = `test-verified-${Date.now()}@campus.edu`;
       // First signup
-      await request(app).post("/api/auth/signup").send(testUser);
+      const signupResponse = await request(app)
+        .post("/api/auth/signup")
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
+        .expect(200);
 
-      // Second signup with same phone number
+      const otpCode = signupResponse.body.development_otp;
+
+      // Verify the account
+      await request(app)
+        .post("/api/auth/verify-otp")
+        .send({
+          email: uniqueEmail,
+          otpCode: otpCode,
+        })
+        .expect(200);
+
+      // Try to sign up again with the now-verified account
       const response = await request(app)
         .post("/api/auth/signup")
         .send({
-          email: "another@campus.edu",
-          phoneNumber: testUser.phoneNumber,
+          email: uniqueEmail,
           name: "Another User",
           password: "TestPassword123",
         })
@@ -108,7 +145,7 @@ describe("Authentication API Tests", () => {
       expect(response.body).toHaveProperty("success", false);
       expect(response.body).toHaveProperty(
         "message",
-        "Phone number already registered. Please log in.",
+        "Account already exists. Please log in.",
       );
     });
   });
@@ -118,11 +155,15 @@ describe("Authentication API Tests", () => {
       clearAuthCache();
     });
 
-    it("should verify OTP and return JWT token", async () => {
+    it("should verify OTP and return auth data", async () => {
+      const uniqueEmail = `test-verify-${Date.now()}@campus.edu`;
       // First signup to get OTP
       const signupResponse = await request(app)
         .post("/api/auth/signup")
-        .send(testUser)
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
         .expect(200);
 
       const otpCode = signupResponse.body.development_otp;
@@ -131,7 +172,7 @@ describe("Authentication API Tests", () => {
       const response = await request(app)
         .post("/api/auth/verify-otp")
         .send({
-          email: testUser.email,
+          email: uniqueEmail,
           otpCode: otpCode,
         })
         .expect(200);
@@ -141,32 +182,40 @@ describe("Authentication API Tests", () => {
         "message",
         "OTP verified successfully",
       );
-      expect(response.body).toHaveProperty("token");
+      expect(response.body).toHaveProperty("csrfToken");
       expect(response.body).toHaveProperty("user");
       expect(response.body.user).toHaveProperty("id");
-      expect(response.body.user).toHaveProperty(
-        "phoneNumber",
-        testUser.phoneNumber,
-      );
-      expect(response.body.user).toHaveProperty("email", testUser.email);
+      expect(response.body.user).toHaveProperty("email", uniqueEmail);
       expect(response.body.user).toHaveProperty("isVerified", true);
 
       // Verify user was created in database
-      const user = await User.findOne({ email: testUser.email });
+      const user = await User.findOne({ email: uniqueEmail });
       expect(user).toBeTruthy();
       expect(user.isVerified).toBe(true);
     });
 
     it("should return error for invalid OTP", async () => {
+      const uniqueEmail = `test-invalid-${Date.now()}@campus.edu`;
       // First signup
-      await request(app).post("/api/auth/signup").send(testUser);
+      const signupResponse = await request(app)
+        .post("/api/auth/signup")
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
+        .expect(200);
 
-      // Verify with wrong OTP
+      // Get the actual OTP from the response
+      const actualOtp = signupResponse.body.development_otp;
+      expect(actualOtp).toBeTruthy();
+
+      // Verify with wrong OTP (using a different 6-digit number)
+      const wrongOtp = String(Number(actualOtp) + 1).padStart(6, "0");
       const response = await request(app)
         .post("/api/auth/verify-otp")
         .send({
-          email: testUser.email,
-          otpCode: "999999",
+          email: uniqueEmail,
+          otpCode: wrongOtp,
         })
         .expect(400);
 
@@ -175,12 +224,19 @@ describe("Authentication API Tests", () => {
     });
 
     it("should return error for expired OTP", async () => {
+      const uniqueEmail = `test-expired-${Date.now()}@campus.edu`;
       // First signup
-      await request(app).post("/api/auth/signup").send(testUser);
+      await request(app)
+        .post("/api/auth/signup")
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
+        .expect(200);
 
       // Manually expire the OTP
       await OTP.updateOne(
-        { email: testUser.email },
+        { email: uniqueEmail },
         { expiresAt: new Date(Date.now() - 10000) },
       );
 
@@ -188,7 +244,7 @@ describe("Authentication API Tests", () => {
       const response = await request(app)
         .post("/api/auth/verify-otp")
         .send({
-          email: testUser.email,
+          email: uniqueEmail,
           otpCode: "123456",
         })
         .expect(400);
@@ -220,13 +276,20 @@ describe("Authentication API Tests", () => {
     });
 
     it("should resend OTP to email", async () => {
+      const uniqueEmail = `test-resend-${Date.now()}@campus.edu`;
       // First signup
-      await request(app).post("/api/auth/signup").send(testUser);
+      await request(app)
+        .post("/api/auth/signup")
+        .send({
+          ...testUser,
+          email: uniqueEmail,
+        })
+        .expect(200);
 
       // Resend OTP using email
       const response = await request(app)
         .post("/api/auth/resend-otp")
-        .send({ email: testUser.email })
+        .send({ email: uniqueEmail })
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -252,35 +315,30 @@ describe("Authentication API Tests", () => {
   });
 
   describe("Protected Routes", () => {
-    let authToken;
+    let authData;
     let userId;
 
     const protectedRoutesUser = {
-      email: "protected-routes@campus.edu",
-      phoneNumber: "+1234567899",
+      email: `protected-routes-${Date.now()}@campus.edu`,
       name: "Protected Routes User",
       password: "TestPassword123",
     };
 
     beforeAll(async () => {
-      const result = await getAuthToken(protectedRoutesUser);
-      authToken = result.token;
-      userId = result.userId;
+      authData = await getAuthToken(protectedRoutesUser);
+      userId = authData.userId;
     });
 
     describe("GET /api/auth/me", () => {
-      it("should return user profile with valid token", async () => {
+      it("should return user profile with valid auth", async () => {
         const response = await request(app)
           .get("/api/auth/me")
-          .set("Authorization", `Bearer ${authToken}`)
+          .set("Cookie", authData.cookies)
+          .set("x-csrf-token", authData.csrfToken)
           .expect(200);
 
         expect(response.body).toHaveProperty("success", true);
         expect(response.body).toHaveProperty("user");
-        expect(response.body.user).toHaveProperty(
-          "phoneNumber",
-          protectedRoutesUser.phoneNumber,
-        );
         expect(response.body.user).toHaveProperty(
           "email",
           protectedRoutesUser.email,
@@ -302,13 +360,14 @@ describe("Authentication API Tests", () => {
       it("should return 401 with invalid token", async () => {
         const response = await request(app)
           .get("/api/auth/me")
-          .set("Authorization", "Bearer invalid_token")
+          .set("Cookie", "invalid-cookie")
+          .set("x-csrf-token", "invalid-token")
           .expect(401);
 
         expect(response.body).toHaveProperty("success", false);
         expect(response.body).toHaveProperty(
           "message",
-          "Invalid token. Please log in again.",
+          "Authentication required. Please log in.",
         );
       });
     });
@@ -317,7 +376,8 @@ describe("Authentication API Tests", () => {
       it("should logout successfully", async () => {
         const response = await request(app)
           .post("/api/auth/logout")
-          .set("Authorization", `Bearer ${authToken}`)
+          .set("Cookie", authData.cookies)
+          .set("x-csrf-token", authData.csrfToken)
           .expect(200);
 
         expect(response.body).toHaveProperty("success", true);

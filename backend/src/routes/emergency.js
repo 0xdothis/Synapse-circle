@@ -220,28 +220,45 @@ router.get(
       });
     }
 
-    // Build geospatial query
-    const query = {
-      isActive: true,
-      coordinates: {
-        $near: {
-          $geometry: {
-            type: "Point",
-            coordinates: [
-              Number.parseFloat(longitude),
-              Number.parseFloat(latitude),
-            ],
+    const lat = Number.parseFloat(latitude);
+    const lng = Number.parseFloat(longitude);
+    const maxDistance = Number.parseInt(radius, 10);
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude and longitude must be valid numbers",
+      });
+    }
+
+    // Using aggregation pipeline
+    const contacts = await EmergencyDirectory.aggregate([
+      {
+        $geoNear: {
+          near: { type: "Point", coordinates: [lng, lat] },
+          distanceField: "distance",
+          maxDistance: Math.max(0, maxDistance),
+          spherical: true,
+          query: {
+            isActive: true,
+            ...(type && { type }),
           },
-          $maxDistance: Number.parseInt(radius),
         },
       },
-    };
-
-    if (type) query.type = type;
-
-    const contacts = await EmergencyDirectory.find(query)
-      .select("-__v")
-      .limit(20);
+      { $limit: 20 },
+      {
+        $project: {
+          name: 1,
+          type: 1,
+          phoneNumber: 1,
+          email: 1,
+          address: 1,
+          distance: 1,
+          operatingHours: 1,
+          isVerified: 1,
+        },
+      },
+    ]);
 
     res.status(200).json({
       success: true,

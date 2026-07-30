@@ -1,5 +1,3 @@
-// src/routes/auth.js - COMPLETE FIXED VERSION
-
 import express from "express";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
@@ -9,21 +7,29 @@ import emailService from "../services/emailService.js";
 import OTP from "../models/OTP.js";
 import { validate, authValidation } from "../middlewares/validator.js";
 import { authenticate } from "../middlewares/auth.js";
-import { otpLimiter, authLimiter } from "../middlewares/rateLimiter.js";
+import {
+  otpLimiter,
+  authLimiter,
+  apiLimiter,
+} from "../middlewares/rateLimiter.js";
 import { body } from "express-validator";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import config from "../utils/config.js";
 import {
-  generateAccessToken,
-  generateRefreshToken,
   setAccessTokenCookie,
   setRefreshTokenCookie,
   clearTokenCookies,
   generateCsrfToken,
   verifyCsrfToken,
   getRefreshTokenFromCookie,
-  verifyRefreshToken,
+  isMobileClient,
 } from "../utils/tokenService.js";
+import {
+  createSession,
+  rotateSession,
+  revokeSession,
+  revokeAllSessions,
+} from "../services/sessionService.js";
 import { logger } from "../utils/logger.js";
 import mongoose from "mongoose";
 import { OAuth2Client } from "google-auth-library";
@@ -31,6 +37,43 @@ import { OAuth2Client } from "google-auth-library";
 const router = express.Router();
 
 const googleClient = new OAuth2Client(config.googleClientId);
+
+/**
+ * Session response strategy
+ * Web clients (browser, no `X-Client-Type: mobile` header): tokens are
+ * NEVER placed in the JSON body. They live only in httpOnly cookies.
+ */
+const respondWithSession = async (
+  req,
+  res,
+  { status = 200, message, user, extra = {} },
+  { userId, email, role = "user" },
+) => {
+  const { accessToken, refreshToken } = await createSession(
+    userId,
+    email,
+    role,
+    { userAgent: req.headers["user-agent"], ip: req.ip },
+  );
+
+  const payload = { success: true, message, ...extra, user };
+
+  if (isMobileClient(req)) {
+    payload.accessToken = accessToken;
+    payload.refreshToken = refreshToken;
+  } else {
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+    payload.csrfToken = generateCsrfToken(res);
+  }
+
+  return res.status(status).json(payload);
+};
+
+const getIncomingRefreshToken = (req) =>
+  isMobileClient(req)
+    ? req.body?.refreshToken || null
+    : getRefreshTokenFromCookie(req);
 
 // Helper: Verify a Google ID token and return its payload
 const verifyGoogleIdToken = async (idToken) => {
@@ -50,17 +93,22 @@ const resolveGoogleUser = async (payload) => {
     return { user, isNewUser: false };
   }
 
-  // Link to an existing local account with the same email, if any
-  user = await User.findOne({ email });
-  if (user) {
-    user.googleId = googleId;
-    if (!user.profilePicture) user.profilePicture = picture;
-    if (user.authProvider === "local" && !user.password) {
-      user.authProvider = "google";
+  /**
+   * If the Google account's email is verified, we can link it to an existing account with the same email.
+   * If the email is not verified, we cannot trust it and must create a new account.
+   */
+  if (email_verified) {
+    user = await User.findOne({ email });
+    if (user) {
+      user.googleId = googleId;
+      if (!user.profilePicture) user.profilePicture = picture;
+      if (user.authProvider === "local" && !user.password) {
+        user.authProvider = "google";
+      }
+      user.isVerified = true;
+      await user.save();
+      return { user, isNewUser: false };
     }
-    if (email_verified) user.isVerified = user.isVerified || true;
-    await user.save();
-    return { user, isNewUser: false };
   }
 
   user = await User.create({
@@ -77,8 +125,8 @@ const resolveGoogleUser = async (payload) => {
 const STEP_ORDER = [
   "welcome",
   "location",
-  "university",
   "contacts",
+  "university",
   "complete",
 ];
 
@@ -87,11 +135,6 @@ const validateStep = (step) => {
   if (!STEP_ORDER.includes(step)) {
     throw new Error("Invalid onboarding step");
   }
-};
-
-// Helper: Check if forward navigation is allowed
-const canNavigateForward = (currentIndex, targetIndex) => {
-  return targetIndex <= currentIndex + 1 || currentIndex === -1;
 };
 
 // Helper: Build navigation response
@@ -116,12 +159,10 @@ const processUniversityData = async (data, userId) => {
     return updateData;
   }
 
-  // Check if University model exists without try/catch
   let University;
   if (mongoose.models.University) {
     University = mongoose.models.University;
   } else {
-    // Model doesn't exist, just use the provided data
     if (data.universityId) {
       updateData.universityId = data.universityId;
     }
@@ -140,7 +181,6 @@ const processUniversityData = async (data, userId) => {
       updateData.selectedUniversity = data.selectedUniversity;
     }
   } catch (error) {
-    // This is a database error - log it and use fallback
     logger.error(
       `Failed to resolve university ${data.universityId} for user ${userId}:`,
       error,
@@ -151,20 +191,6 @@ const processUniversityData = async (data, userId) => {
   }
 
   return updateData;
-};
-
-// Helper: Process location data - FIXED to properly save location
-const processLocationData = (user, data) => {
-  if (data.location?.latitude && data.location?.longitude) {
-    if (!user.preferences) user.preferences = {};
-    user.preferences.onboardingLocation = {
-      latitude: data.location.latitude,
-      longitude: data.location.longitude,
-      updatedAt: new Date(),
-    };
-    return true;
-  }
-  return false;
 };
 
 // Helper Validate completion prerequisites
@@ -215,7 +241,6 @@ const buildUserResponse = (user) => {
     id: user._id,
     name: user.name,
     email: user.email,
-    phoneNumber: user.phoneNumber,
     isVerified: user.isVerified,
     onboardingStep: user.onboardingStep,
     authProvider: user.authProvider,
@@ -236,17 +261,14 @@ const resolveStepNavigation = (user, step) => {
   const currentIndex = STEP_ORDER.indexOf(user.onboardingStep);
   const targetIndex = STEP_ORDER.indexOf(step);
 
-  // Allow jumping to complete from any step (will be validated by checkCompletionPrerequisites)
   if (step === "complete") {
     return { ok: true, currentIndex, targetIndex };
   }
 
-  // Allow going backward freely
   if (targetIndex < currentIndex) {
     return { ok: true, currentIndex, targetIndex };
   }
 
-  // Only allow forward movement one step at a time
   if (targetIndex > currentIndex + 1) {
     const nextStep = STEP_ORDER[currentIndex + 1] || "complete";
     return {
@@ -304,7 +326,6 @@ const checkCompletionPrerequisites = async (
 const buildStepUpdateData = async (step, data, user, userId) => {
   const updateData = {};
 
-  // Always update the onboarding step
   updateData.onboardingStep = step;
 
   if (step === "university") {
@@ -319,7 +340,6 @@ const buildStepUpdateData = async (step, data, user, userId) => {
   ) {
     const currentPreferences = user.preferences || {};
 
-    // Update the entire preferences object with the new location data
     updateData.preferences = {
       ...currentPreferences,
       onboardingLocation: {
@@ -347,20 +367,17 @@ const getContactSummary = async (userId, targetIndex, contactsIndex) => {
   return { count, maxContacts: config.maxTrustedContacts };
 };
 
-// ---------- CSRF Token Endpoint ----------
 /**
  * @swagger
  * /api/auth/csrf-token:
  *   get:
  *     summary: Get a CSRF token
- *     description: >
- *       Issues a CSRF token, returned in the response body and also set as a
- *       non-httpOnly `csrfToken` cookie.
+ *     description: Issues a CSRF token for web clients to use in mutating requests. The token is returned in the response body and also set as a non-httpOnly cookie.
  *     tags: [Authentication]
  *     security: []
  *     responses:
  *       200:
- *         description: CSRF token issued
+ *         description: CSRF token issued successfully
  *         content:
  *           application/json:
  *             schema:
@@ -368,14 +385,17 @@ const getContactSummary = async (userId, targetIndex, contactsIndex) => {
  *               properties:
  *                 csrfToken:
  *                   type: string
- *                   example: 9f2b1e4a7c3d8f0a1b2c3d4e5f6a7b8c
+ *                   example: "a1b2c3d4e5f6..."
+ *       400:
+ *         description: Invalid request
+ *       500:
+ *         description: Server error
  */
 router.get("/csrf-token", (req, res) => {
   const token = generateCsrfToken(res);
   res.json({ csrfToken: token });
 });
 
-// Helper: Validate signup input (email/password presence and password strength)
 const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
 
 const validateSignupInput = (email, password) => {
@@ -411,46 +431,12 @@ const validateSignupInput = (email, password) => {
 };
 
 /**
- * Helper: Resolve whether this signup conflicts with an existing account, or if it can resume an incomplete signup.
- * Returns either a conflict response or the existing user (if any).
+ * Look up whether this email is already in use
  */
-const resolveSignupAccount = async (email, phoneNumber) => {
+const resolveSignupAccount = async (email) => {
   const existingByEmail = await User.findOne({ email });
-  const existingByPhone = await User.findOne({ phoneNumber });
 
-  /**
-   * Only treat this as "resuming" an incomplete signup if the email and
-   * phone number both belong to the SAME existing account. Otherwise, one
-   * of them belongs to a different account and is a genuine conflict.
-   */
-  const isSameAccount =
-    existingByEmail &&
-    existingByPhone &&
-    existingByEmail._id.equals(existingByPhone._id);
-
-  if (!isSameAccount) {
-    if (existingByEmail) {
-      return {
-        conflict: {
-          status: 400,
-          body: {
-            success: false,
-            message: "Email already registered. Please use a different email.",
-          },
-        },
-      };
-    }
-    if (existingByPhone) {
-      return {
-        conflict: {
-          status: 400,
-          body: {
-            success: false,
-            message: "Phone number already registered. Please log in.",
-          },
-        },
-      };
-    }
+  if (!existingByEmail) {
     return { user: null };
   }
 
@@ -469,21 +455,13 @@ const resolveSignupAccount = async (email, phoneNumber) => {
   return { user: existingByEmail };
 };
 
-/**
- * Helper: Create a new user, or update an existing unverified one to resume
- * an incomplete signup.
- */
-const upsertSignupUser = async (
-  existingUser,
-  { email, phoneNumber, name, password },
-) => {
+const upsertSignupUser = async (existingUser, { email, name, password }) => {
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
   if (existingUser) {
     existingUser.name = name || existingUser.name;
     existingUser.email = email || existingUser.email;
-    existingUser.phoneNumber = phoneNumber || existingUser.phoneNumber;
     existingUser.password = hashedPassword;
     existingUser.lastPasswordChange = new Date();
     await existingUser.save();
@@ -492,7 +470,6 @@ const upsertSignupUser = async (
 
   const user = await User.create({
     email,
-    phoneNumber,
     name: name || "",
     password: hashedPassword,
     isVerified: false,
@@ -504,10 +481,9 @@ const upsertSignupUser = async (
  * @swagger
  * /api/auth/signup:
  *   post:
- *     summary: Send OTP for signup
- *     description: Creates a user and sends a 6-digit OTP to their email
+ *     summary: Register a new user
+ *     description: Creates a new user account and sends an OTP to the provided email for verification. The user must verify the OTP within 10 minutes.
  *     tags: [Authentication]
- *     security: []
  *     requestBody:
  *       required: true
  *       content:
@@ -517,40 +493,50 @@ const upsertSignupUser = async (
  *     responses:
  *       200:
  *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SignupResponse'
  *       400:
  *         description: Validation error or user already exists
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many requests
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/signup",
   authLimiter,
+  verifyCsrfToken,
   validate(authValidation.signup),
   asyncHandler(async (req, res, next) => {
     try {
-      const { email, phoneNumber, name, password } = req.body;
+      const { email, name, password } = req.body;
 
       const inputError = validateSignupInput(email, password);
       if (inputError) {
         return res.status(inputError.status).json(inputError.body);
       }
 
-      const accountResult = await resolveSignupAccount(email, phoneNumber);
-      if (accountResult.conflict) {
-        return res
-          .status(accountResult.conflict.status)
-          .json(accountResult.conflict.body);
+      const { user: existingUnverifiedUser, conflict } =
+        await resolveSignupAccount(email);
+
+      if (conflict) {
+        return res.status(conflict.status).json(conflict.body);
       }
 
-      const { user, isNewUser } = await upsertSignupUser(accountResult.user, {
-        email,
-        phoneNumber,
-        name,
-        password,
-      });
+      const { user, isNewUser } = await upsertSignupUser(
+        existingUnverifiedUser,
+        { email, name, password },
+      );
 
-      // Send OTP via email
-      const result = await emailService.sendOTP(email, phoneNumber, "signup");
+      const result = await emailService.sendOTP(email, "signup");
 
       if (isNewUser) {
         Promise.resolve(emailService.sendWelcomeEmail(user)).catch((err) => {
@@ -558,9 +544,12 @@ router.post(
         });
       }
 
+      const csrfToken = generateCsrfToken(res);
+
       const response = {
         success: true,
         message: result.message || "OTP sent successfully to your email",
+        csrfToken: csrfToken,
       };
 
       if (config.isDevelopment && result.development_otp) {
@@ -579,50 +568,50 @@ router.post(
  * /api/auth/login:
  *   post:
  *     summary: Login with email and password
- *     description: Authenticates a user with email and password, sets HTTP-only cookies
+ *     description: Authenticates a user with email and password. Web clients receive httpOnly cookies; mobile clients receive access/refresh tokens.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - password
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               password:
- *                 type: string
+ *             $ref: '#/components/schemas/LoginRequest'
  *     responses:
  *       200:
  *         description: Login successful
- *         headers:
- *           Set-Cookie:
- *             description: accessToken and refreshToken HTTP-only cookies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
  *       400:
  *         description: No password set on this account
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
  *         description: Account deactivated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/login",
-  verifyCsrfToken,
   authLimiter,
+  verifyCsrfToken,
   validate(authValidation.login),
   asyncHandler(async (req, res, next) => {
     try {
@@ -660,17 +649,6 @@ router.post(
         });
       }
 
-      // Generate tokens
-      const accessToken = generateAccessToken(user._id, user.email);
-      const refreshToken = generateRefreshToken(user._id, user.email);
-
-      // Set cookies
-      setAccessTokenCookie(res, accessToken);
-      setRefreshTokenCookie(res, refreshToken);
-
-      // Generate CSRF token
-      const csrfToken = generateCsrfToken(res);
-
       user.lastLogin = new Date();
       await user.save();
 
@@ -680,22 +658,100 @@ router.post(
         ip: req.ip,
       });
 
-      res.status(200).json({
-        success: true,
-        message: "Login successful",
-        token: accessToken,
-        refreshToken,
-        csrfToken,
-        user: {
-          id: user._id,
-          phoneNumber: user.phoneNumber,
-          name: user.name,
-          email: user.email,
-          isVerified: user.isVerified,
-          onboardingStep: user.onboardingStep,
+      await respondWithSession(
+        req,
+        res,
+        {
+          message: "Login successful",
+          user: buildUserResponse(user),
         },
-      });
+        { userId: user._id, email: user.email, role: user.role || "user" },
+      );
     } catch (error) {
+      next(error);
+    }
+  }),
+);
+
+/**
+ * @swagger
+ * /api/auth/verify-otp:
+ *   post:
+ *     summary: Verify OTP and complete authentication
+ *     description: Verifies the OTP sent to the user's email. On success, creates a session and sets authentication cookies (web) or returns tokens (mobile).
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/VerifyOTPRequest'
+ *     responses:
+ *       200:
+ *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
+ *       400:
+ *         description: Invalid or expired OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Too many attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post(
+  "/verify-otp",
+  authLimiter,
+  verifyCsrfToken,
+  validate(authValidation.verifyOTP),
+  asyncHandler(async (req, res, next) => {
+    try {
+      const { email, otpCode } = req.body;
+
+      const result = await emailService.verifyOTP(email, otpCode);
+
+      result.user.lastLogin = new Date();
+      await result.user.save();
+
+      await respondWithSession(
+        req,
+        res,
+        {
+          message: "OTP verified successfully",
+          user: buildUserResponse(result.user),
+        },
+        {
+          userId: result.user._id,
+          email: result.user.email,
+          role: result.user.role || "user",
+        },
+      );
+    } catch (error) {
+      if (error.message === "Invalid or expired OTP") {
+        return res.status(400).json({
+          success: false,
+          message: error.message,
+        });
+      }
+      if (error.message === "User not found") {
+        return res.status(404).json({
+          success: false,
+          message: "User not found. Please sign up first.",
+        });
+      }
       next(error);
     }
   }),
@@ -706,16 +762,8 @@ router.post(
  * /api/auth/google:
  *   post:
  *     summary: Sign in or sign up with Google
- *     description: Verifies a Google ID token (obtained client-side via Google Sign-In) and issues HTTP-only session cookies. Creates a new account on first sign-in, or links Google to an existing account with the same email.
+ *     description: Authenticates using Google OAuth. If the email is verified and exists, links the account. Otherwise, creates a new account.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
@@ -727,24 +775,55 @@ router.post(
  *             properties:
  *               idToken:
  *                 type: string
- *                 description: The ID token returned by Google Sign-In on the client
+ *                 description: Google ID token from OAuth flow
  *     responses:
  *       200:
  *         description: Signed in successfully
- *         headers:
- *           Set-Cookie:
- *             description: accessToken and refreshToken HTTP-only cookies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Login successful"
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *                 isNewUser:
+ *                   type: boolean
+ *                   example: false
+ *                 csrfToken:
+ *                   type: string
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
  *       400:
  *         description: Missing or invalid ID token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Google token verification failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       403:
- *         description: Account is deactivated
+ *         description: Account deactivated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/google",
-  verifyCsrfToken,
   authLimiter,
+  verifyCsrfToken,
   validate([
     body("idToken").notEmpty().withMessage("Google ID token is required"),
   ]),
@@ -785,15 +864,6 @@ router.post(
         });
       }
 
-      // Generate tokens (same session mechanism as password login)
-      const accessToken = generateAccessToken(user._id, user.email);
-      const refreshToken = generateRefreshToken(user._id, user.email);
-
-      setAccessTokenCookie(res, accessToken);
-      setRefreshTokenCookie(res, refreshToken);
-
-      const csrfToken = generateCsrfToken(res);
-
       user.lastLogin = new Date();
       await user.save();
 
@@ -803,15 +873,18 @@ router.post(
         isNewUser,
       });
 
-      res.status(200).json({
-        success: true,
-        message: isNewUser ? "Account created with Google" : "Login successful",
-        isNewUser,
-        token: accessToken,
-        refreshToken,
-        csrfToken,
-        user: buildUserResponse(user),
-      });
+      await respondWithSession(
+        req,
+        res,
+        {
+          message: isNewUser
+            ? "Account created with Google"
+            : "Login successful",
+          extra: { isNewUser },
+          user: buildUserResponse(user),
+        },
+        { userId: user._id, email: user.email, role: user.role || "user" },
+      );
     } catch (error) {
       next(error);
     }
@@ -823,31 +896,47 @@ router.post(
  * /api/auth/refresh-token:
  *   post:
  *     summary: Refresh access token
- *     description: Uses refresh token cookie to generate new access and refresh tokens
+ *     description: Exchanges a valid refresh token for a new access token. Refresh tokens are rotated on every use. Reusing a revoked token triggers session revocation.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenRequest'
  *     responses:
  *       200:
  *         description: Tokens refreshed successfully
- *         headers:
- *           Set-Cookie:
- *             description: New accessToken and refreshToken HTTP-only cookies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/AuthResponse'
  *       401:
- *         description: Invalid or missing refresh token
+ *         description: Invalid, expired, or reused refresh token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Account deactivated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/refresh-token",
+  apiLimiter,
   verifyCsrfToken,
   asyncHandler(async (req, res, next) => {
     try {
-      const refreshToken = getRefreshTokenFromCookie(req);
+      const refreshToken = getIncomingRefreshToken(req);
 
       if (!refreshToken) {
         return res.status(401).json({
@@ -856,169 +945,61 @@ router.post(
         });
       }
 
-      const decoded = verifyRefreshToken(refreshToken);
+      const result = await rotateSession(refreshToken, {
+        userAgent: req.headers["user-agent"],
+        ip: req.ip,
+      });
 
-      if (!decoded) {
+      if (result.error === "REUSED") {
+        clearTokenCookies(res);
+        return res.status(401).json({
+          success: false,
+          message:
+            "This session is no longer valid. Please log in again on all devices.",
+          code: "SESSION_REUSE_DETECTED",
+        });
+      }
+
+      if (result.error === "INVALID") {
+        clearTokenCookies(res);
         return res.status(401).json({
           success: false,
           message: "Invalid or expired refresh token. Please log in again.",
         });
       }
 
-      // Find user
-      const user = await User.findById(decoded.userId);
+      const user = await User.findById(result.userId);
       if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found.",
-        });
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found." });
       }
 
       if (!user.isActive) {
-        return res.status(403).json({
-          success: false,
-          message: "Account is deactivated.",
-        });
+        return res
+          .status(403)
+          .json({ success: false, message: "Account is deactivated." });
       }
 
-      // Generate new tokens
-      const newAccessToken = generateAccessToken(user._id, user.email);
-      const newRefreshToken = generateRefreshToken(user._id, user.email);
-
-      // Set new cookies
-      setAccessTokenCookie(res, newAccessToken);
-      setRefreshTokenCookie(res, newRefreshToken);
-
-      // Generate new CSRF token
-      const csrfToken = generateCsrfToken(res);
-
-      logger.info("Tokens refreshed", {
-        userId: user._id,
-        email: user.email,
-      });
-
-      res.status(200).json({
+      const payload = {
         success: true,
         message: "Tokens refreshed successfully",
-        csrfToken,
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          phoneNumber: user.phoneNumber,
-          isVerified: user.isVerified,
-        },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }),
-);
+        user: buildUserResponse(user),
+      };
 
-/**
- * @swagger
- * /api/auth/verify-otp:
- *   post:
- *     summary: Verify OTP and complete signup/login
- *     description: Verifies the OTP sent to email and sets auth cookies
- *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otpCode
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               otpCode:
- *                 type: string
- *                 example: 123456
- *     responses:
- *       200:
- *         description: OTP verified successfully
- *         headers:
- *           Set-Cookie:
- *             description: accessToken and refreshToken HTTP-only cookies
- *       400:
- *         description: Invalid or expired OTP
- *       404:
- *         description: User not found
- */
-router.post(
-  "/verify-otp",
-  verifyCsrfToken,
-  authLimiter,
-  validate(authValidation.verifyOTP),
-  asyncHandler(async (req, res, next) => {
-    try {
-      const { email, otpCode } = req.body;
-
-      // Verify OTP using email
-      const result = await emailService.verifyOTP(email, otpCode);
-
-      // Generate tokens
-      const accessToken = generateAccessToken(
-        result.user._id,
-        result.user.email,
-      );
-      const refreshToken = generateRefreshToken(
-        result.user._id,
-        result.user.email,
-      );
-
-      // Set cookies
-      setAccessTokenCookie(res, accessToken);
-      setRefreshTokenCookie(res, refreshToken);
-
-      // Generate CSRF token
-      const csrfToken = generateCsrfToken(res);
-
-      // Update last login
-      result.user.lastLogin = new Date();
-      await result.user.save();
-
-      res.status(200).json({
-        success: true,
-        message: "OTP verified successfully",
-        token: accessToken,
-        refreshToken,
-        csrfToken,
-        user: {
-          id: result.user._id,
-          phoneNumber: result.user.phoneNumber,
-          name: result.user.name,
-          email: result.user.email,
-          isVerified: result.user.isVerified,
-          onboardingStep: result.user.onboardingStep,
-        },
-      });
-    } catch (error) {
-      // Handle known errors gracefully
-      if (error.message === "Invalid or expired OTP") {
-        return res.status(400).json({
-          success: false,
-          message: error.message,
-        });
+      if (isMobileClient(req)) {
+        payload.accessToken = result.accessToken;
+        payload.refreshToken = result.refreshToken;
+      } else {
+        setAccessTokenCookie(res, result.accessToken);
+        setRefreshTokenCookie(res, result.refreshToken);
+        payload.csrfToken = generateCsrfToken(res);
       }
-      if (error.message === "User not found") {
-        return res.status(404).json({
-          success: false,
-          message: "User not found. Please sign up first.",
-        });
-      }
+
+      logger.info("Tokens refreshed", { userId: user._id, email: user.email });
+
+      res.status(200).json(payload);
+    } catch (error) {
       next(error);
     }
   }),
@@ -1028,17 +1009,9 @@ router.post(
  * @swagger
  * /api/auth/resend-otp:
  *   post:
- *     summary: Resend OTP
- *     description: Resends a new OTP to the user's registered email
+ *     summary: Resend OTP to email
+ *     description: Resends a new OTP to the user's email address. Previous OTPs are invalidated.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
@@ -1051,18 +1024,42 @@ router.post(
  *               email:
  *                 type: string
  *                 format: email
+ *                 example: "student@campus.edu"
  *     responses:
  *       200:
  *         description: OTP resent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "OTP resent successfully to your email"
+ *                 development_otp:
+ *                   type: string
+ *                   example: "654321"
+ *                   description: ⚠️ Development only - new OTP for testing
  *       404:
  *         description: Email not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many requests
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/resend-otp",
-  verifyCsrfToken,
   otpLimiter,
+  verifyCsrfToken,
   validate(authValidation.resendOTP),
   asyncHandler(async (req, res, next) => {
     try {
@@ -1076,10 +1073,9 @@ router.post(
         });
       }
 
-      // Invalidate old OTPs
       await OTP.updateMany({ email, isUsed: false }, { isUsed: true });
 
-      const result = await emailService.resendOTP(email, user.phoneNumber);
+      const result = await emailService.resendOTP(email);
 
       const response = {
         success: true,
@@ -1102,27 +1098,51 @@ router.post(
  * /api/auth/logout:
  *   post:
  *     summary: Logout user
- *     description: Clears authentication cookies and logs out the user
+ *     description: Revokes the current refresh token and clears session cookies. Mobile clients should discard stored tokens on receiving 200.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               refreshToken:
+ *                 type: string
+ *                 description: Refresh token to revoke (required for mobile clients)
  *     responses:
  *       200:
  *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Logged out successfully"
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/logout",
-  verifyCsrfToken,
   authenticate,
+  verifyCsrfToken,
   asyncHandler(async (req, res) => {
-    // Clear all auth cookies
+    const refreshToken = getIncomingRefreshToken(req);
+    if (refreshToken) {
+      await revokeSession(refreshToken);
+    }
+
     clearTokenCookies(res);
 
     logger.info("User logged out", {
@@ -1141,57 +1161,47 @@ router.post(
  * @swagger
  * /api/auth/onboarding-step:
  *   patch:
- *     summary: Update onboarding step
- *     description: Updates the user's current onboarding step
+ *     summary: Advance or update the onboarding step
+ *     description: Moves the authenticated user's onboarding to a new step and persists any step-specific data (location, university selection, etc).
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - step
- *             properties:
- *               step:
- *                 type: string
- *                 enum: [welcome, location, university, contacts, complete]
- *                 example: university
- *               data:
- *                 type: object
- *                 properties:
- *                   universityId:
- *                     type: string
- *                   selectedUniversity:
- *                     type: string
- *                   location:
- *                     type: object
- *                     properties:
- *                       latitude:
- *                         type: number
- *                       longitude:
- *                         type: number
+ *             $ref: '#/components/schemas/OnboardingStepRequest'
  *     responses:
  *       200:
  *         description: Onboarding step updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OnboardingStepResponse'
  *       400:
- *         description: Invalid step
+ *         description: Invalid step, out-of-order navigation, or missing prerequisites (e.g. no trusted contacts before completion)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.patch(
   "/onboarding-step",
-  verifyCsrfToken,
   authenticate,
+  verifyCsrfToken,
   validate([
     body("step")
       .notEmpty()
@@ -1207,14 +1217,6 @@ router.patch(
     try {
       const { step, data = {} } = req.body;
       const userId = req.userId;
-
-      // Check if user was not found by auth middleware
-      if (req._userNotFound) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
 
       const user = await User.findById(userId);
       if (!user) {
@@ -1251,7 +1253,6 @@ router.patch(
 
       const updateData = await buildStepUpdateData(step, data, user, userId);
 
-      // Use $set for all updates - this handles dot notation properly
       const updatedUser = await User.findByIdAndUpdate(
         userId,
         { $set: updateData },
@@ -1305,15 +1306,29 @@ router.patch(
  * /api/auth/onboarding-status:
  *   get:
  *     summary: Get onboarding status
- *     description: Returns the current onboarding status and available steps
+ *     description: Returns the current onboarding progress including step statuses, progress percentage, and navigation options.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Onboarding status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/OnboardingStatusResponse'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/onboarding-status",
@@ -1321,14 +1336,6 @@ router.get(
   asyncHandler(async (req, res, next) => {
     try {
       const userId = req.userId;
-
-      // Check if user was not found by auth middleware
-      if (req._userNotFound) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
 
       const user = await User.findById(userId);
       if (!user) {
@@ -1344,14 +1351,12 @@ router.get(
       const stepLabels = {
         welcome: "Welcome & Profile",
         location: "Location Settings",
-        university: "University Selection",
         contacts: "Add Contacts",
+        university: "University Selection",
         complete: "Complete",
       };
 
-      // When isComplete is true, ALL steps should be marked as completed
       const steps = STEP_ORDER.map((step, index) => {
-        // If onboarding is complete, all steps are completed
         if (isComplete) {
           return {
             step,
@@ -1398,16 +1403,7 @@ router.get(
         previousStep: canGoBack ? STEP_ORDER[currentIndex - 1] : null,
         contactsCount: contactCount,
         maxContacts: config.maxTrustedContacts,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          isVerified: user.isVerified,
-          ...(user.selectedUniversity && {
-            selectedUniversity: user.selectedUniversity,
-          }),
-        },
+        user: buildUserResponse(user),
       });
     } catch (error) {
       next(error);
@@ -1420,15 +1416,35 @@ router.get(
  * /api/auth/me:
  *   get:
  *     summary: Get current user profile
- *     description: Returns the authenticated user's profile information
+ *     description: Returns the authenticated user's profile information including contacts count and settings.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: User profile retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.get(
   "/me",
@@ -1437,6 +1453,12 @@ router.get(
     try {
       const user = await User.findById(req.userId).select("-__v");
 
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
       const contactCount = await TrustedContact.countDocuments({
         userId: req.userId,
         isActive: true,
@@ -1461,40 +1483,52 @@ router.get(
  * /api/auth/forgot-password:
  *   post:
  *     summary: Request password reset OTP
- *     description: Sends a password reset OTP to the user's email
+ *     description: Sends a password reset OTP to the user's email address. The OTP expires in 10 minutes.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
+ *             $ref: '#/components/schemas/ForgotPasswordRequest'
  *     responses:
  *       200:
  *         description: Password reset OTP sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Password reset OTP sent to your email."
+ *                 resetId:
+ *                   type: string
+ *                   example: "507f1f77bcf86cd799439011"
+ *                 development_otp:
+ *                   type: string
+ *                   example: "123456"
+ *                   description: ⚠️ Development only - OTP for testing
  *       404:
  *         description: Email not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many requests
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/forgot-password",
-  verifyCsrfToken,
   otpLimiter,
+  verifyCsrfToken,
   validate([
     body("email")
       .notEmpty()
@@ -1529,7 +1563,6 @@ router.post(
         });
       }
 
-      // Invalidate any existing reset OTPs
       await OTP.updateMany(
         {
           email: user.email,
@@ -1541,7 +1574,6 @@ router.post(
 
       const result = await emailService.sendPasswordResetOTP(
         user.email,
-        user.phoneNumber,
         user.name,
       );
 
@@ -1567,46 +1599,58 @@ router.post(
  * /api/auth/verify-reset-otp:
  *   post:
  *     summary: Verify password reset OTP
- *     description: Verifies the OTP for password reset and returns a reset token
+ *     description: Verifies the password reset OTP and returns a reset token for setting a new password.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - email
- *               - otpCode
- *             properties:
- *               email:
- *                 type: string
- *                 format: email
- *               otpCode:
- *                 type: string
- *                 example: 123456
+ *             $ref: '#/components/schemas/VerifyOTPRequest'
  *     responses:
  *       200:
  *         description: OTP verified successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "OTP verified successfully. You can now reset your password."
+ *                 resetToken:
+ *                   type: string
+ *                   description: JWT token for password reset (expires in 30 minutes)
+ *                 resetId:
+ *                   type: string
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
  *       400:
  *         description: Invalid or expired OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       429:
  *         description: Too many attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/verify-reset-otp",
-  verifyCsrfToken,
   authLimiter,
+  verifyCsrfToken,
   validate([
     body("email")
       .notEmpty()
@@ -1627,6 +1671,7 @@ router.post(
 
       const result = await emailService.verifyPasswordResetOTP(email, otpCode);
 
+      // Distinct-purpose, short-lived token
       const resetToken = jwt.sign(
         {
           userId: result.user._id,
@@ -1677,44 +1722,56 @@ router.post(
  * /api/auth/reset-password:
  *   post:
  *     summary: Reset password
- *     description: Resets the user's password using the reset token
+ *     description: Resets the user's password using a valid reset token. All existing sessions are revoked.
  *     tags: [Authentication]
- *     security: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - resetToken
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               resetToken:
- *                 type: string
- *               newPassword:
- *                 type: string
- *                 minLength: 8
- *               confirmPassword:
- *                 type: string
+ *             $ref: '#/components/schemas/ResetPasswordRequest'
  *     responses:
  *       200:
  *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Password reset successfully. You can now login with your new password."
  *       400:
  *         description: Invalid reset token or passwords don't match
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Invalid or expired reset token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Too many attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/reset-password",
+  authLimiter,
   verifyCsrfToken,
   validate([
     body("resetToken").notEmpty().withMessage("Reset token is required"),
@@ -1797,6 +1854,9 @@ router.post(
         { isUsed: true },
       );
 
+      // A stolen refresh token issued before the reset must not survive it.
+      await revokeAllSessions(user._id);
+
       logger.info(`Password reset for user: ${user.email}`);
 
       res.status(200).json({
@@ -1815,47 +1875,59 @@ router.post(
  * /api/auth/change-password:
  *   post:
  *     summary: Change password (authenticated)
- *     description: Allows authenticated users to change their password
+ *     description: Changes the user's password. Requires current password for verification. All existing sessions are revoked.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: header
- *         name: x-csrf-token
- *         required: true
- *         schema:
- *           type: string
- *         description: Token obtained from GET /api/auth/csrf-token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - currentPassword
- *               - newPassword
- *               - confirmPassword
- *             properties:
- *               currentPassword:
- *                 type: string
- *               newPassword:
- *                 type: string
- *                 minLength: 8
- *               confirmPassword:
- *                 type: string
+ *             $ref: '#/components/schemas/ChangePasswordRequest'
  *     responses:
  *       200:
  *         description: Password changed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Password changed successfully. Please log in again."
  *       400:
  *         description: Invalid current password or validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       401:
  *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       429:
+ *         description: Too many attempts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   "/change-password",
-  verifyCsrfToken,
   authenticate,
+  verifyCsrfToken,
   validate([
     body("currentPassword")
       .notEmpty()
@@ -1916,14 +1988,15 @@ router.post(
       user.lastPasswordChange = new Date();
       await user.save();
 
-      // Clear all auth cookies - force re-login
+      // Revoke every outstanding session
+      await revokeAllSessions(user._id);
       clearTokenCookies(res);
 
       logger.info(`Password changed for user: ${user.email}`);
 
       res.status(200).json({
         success: true,
-        message: "Password changed successfully. Please login again.",
+        message: "Password changed successfully. Please log in again.",
       });
     } catch (error) {
       next(error);

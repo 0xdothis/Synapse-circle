@@ -1,38 +1,23 @@
 import { body, validationResult } from "express-validator";
-import { PHONE_REGEX, EMAIL_REGEX } from "../utils/regex.js";
+import { EMAIL_REGEX } from "../utils/regex.js";
 
-// Validation rules
-const validatePhoneNumber = (value) => {
-  if (!PHONE_REGEX.test(value)) {
-    throw new Error("Invalid phone number format");
-  }
-  return true;
-};
-
+// Structural check (exactly one '@', non-empty local/domain parts, domain contains a dot)
 const validateEmail = (value) => {
-  if (!EMAIL_REGEX.test(value)) {
-    throw new Error("Invalid email format");
-  }
-  return true;
-};
-
-const validateEmailSecure = (value) => {
   if (!value || typeof value !== "string") {
     throw new Error("Invalid email format");
   }
 
-  // Basic but safe validation
   const parts = value.split("@");
   if (parts.length !== 2) {
     throw new Error("Invalid email format");
   }
 
   const [local, domain] = parts;
-  if (local.length === 0 || domain.length === 0) {
+  if (local.length === 0 || domain.length === 0 || !domain.includes(".")) {
     throw new Error("Invalid email format");
   }
 
-  if (!domain.includes(".")) {
+  if (!EMAIL_REGEX.test(value)) {
     throw new Error("Invalid email format");
   }
 
@@ -48,10 +33,6 @@ const authValidation = {
       .isEmail()
       .withMessage("Please enter a valid email address")
       .normalizeEmail(),
-    body("phoneNumber")
-      .notEmpty()
-      .withMessage("Phone number is required")
-      .custom(validatePhoneNumber),
     body("name")
       .optional()
       .isLength({ max: 100 })
@@ -164,10 +145,6 @@ const contactValidation = {
       .withMessage("Name is required")
       .isLength({ max: 100 })
       .withMessage("Name cannot exceed 100 characters"),
-    body("phoneNumber")
-      .notEmpty()
-      .withMessage("Phone number is required")
-      .custom(validatePhoneNumber),
     body("email")
       .notEmpty()
       .withMessage("Email is required")
@@ -185,7 +162,6 @@ const contactValidation = {
       .optional()
       .isLength({ max: 100 })
       .withMessage("Name cannot exceed 100 characters"),
-    body("phoneNumber").optional().custom(validatePhoneNumber),
     body("email")
       .optional()
       .isEmail()
@@ -200,23 +176,19 @@ const contactValidation = {
 const sosValidation = {
   trigger: [
     body("latitude")
-      .optional()
+      .notEmpty()
+      .withMessage("Location is required to send an SOS alert")
       .isFloat({ min: -90, max: 90 })
       .withMessage("Invalid latitude"),
     body("longitude")
-      .optional()
+      .notEmpty()
+      .withMessage("Location is required to send an SOS alert")
       .isFloat({ min: -180, max: 180 })
       .withMessage("Invalid longitude"),
     body("locationAvailable")
       .optional()
       .isBoolean()
       .withMessage("locationAvailable must be boolean"),
-    body("message")
-      .optional()
-      .isString()
-      .withMessage("Message must be a string")
-      .isLength({ max: 500 })
-      .withMessage("Message cannot exceed 500 characters"),
   ],
 
   cancel: [
@@ -227,10 +199,27 @@ const sosValidation = {
   ],
 };
 
+const profileValidation = {
+  updateName: [
+    body("name")
+      .notEmpty()
+      .withMessage("Name is required")
+      .isLength({ max: 100 })
+      .withMessage("Name cannot exceed 100 characters"),
+  ],
+
+  updateEmail: [
+    body("email")
+      .notEmpty()
+      .withMessage("Email is required")
+      .isEmail()
+      .withMessage("Please enter a valid email address"),
+  ],
+};
+
 // Validation result handler
 const validate = (validations) => {
   return async (req, res, next) => {
-    // Run all validations
     await Promise.all(validations.map((validation) => validation.run(req)));
 
     const errors = validationResult(req);
@@ -238,7 +227,6 @@ const validate = (validations) => {
       return next();
     }
 
-    // Format errors
     const formattedErrors = errors.array().map((error) => ({
       field: error.path,
       message: error.msg,
@@ -257,6 +245,6 @@ export {
   authValidation,
   contactValidation,
   sosValidation,
-  validatePhoneNumber,
+  profileValidation,
   validateEmail,
 };

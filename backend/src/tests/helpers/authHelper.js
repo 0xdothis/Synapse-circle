@@ -1,15 +1,13 @@
 import request from "supertest";
 import app from "../../../server.js";
 
-// Cache tokens per user email
-const tokenCache = new Map();
+const authCache = new Map();
 
 export const getAuthToken = async (testUser) => {
   const cacheKey = testUser.email;
 
-  // If we already have a cached token for this user and  return it
-  if (tokenCache.has(cacheKey)) {
-    return tokenCache.get(cacheKey);
+  if (authCache.has(cacheKey)) {
+    return authCache.get(cacheKey);
   }
 
   const userWithPassword = {
@@ -17,14 +15,19 @@ export const getAuthToken = async (testUser) => {
     password: testUser.password || "TestPassword123",
   };
 
-  // Create user and get token
+  // Sign up - phone number removed
   const signupResponse = await request(app)
     .post("/api/auth/signup")
-    .send(userWithPassword)
+    .send({
+      email: userWithPassword.email,
+      name: userWithPassword.name,
+      password: userWithPassword.password,
+    })
     .expect(200);
 
   const otpCode = signupResponse.body.development_otp;
 
+  // Verify OTP
   const verifyResponse = await request(app)
     .post("/api/auth/verify-otp")
     .send({
@@ -33,19 +36,42 @@ export const getAuthToken = async (testUser) => {
     })
     .expect(200);
 
+  const cookies = verifyResponse.headers["set-cookie"];
+  const csrfToken = verifyResponse.body.csrfToken;
+
+  if (!cookies || !csrfToken) {
+    throw new Error("Failed to get auth cookies or CSRF token");
+  }
+
   const result = {
-    token: verifyResponse.body.token,
+    token: verifyResponse.body.token || null,
+    csrfToken: csrfToken,
+    cookies: cookies,
     userId: verifyResponse.body.user.id,
+    user: verifyResponse.body.user,
+    getHeaders: () => ({
+      Cookie: cookies.join("; "),
+      "x-csrf-token": csrfToken,
+    }),
   };
 
-  tokenCache.set(cacheKey, result);
+  authCache.set(cacheKey, result);
   return result;
 };
 
+export const getAuthCookies = async (testUser) => {
+  const result = await getAuthToken(testUser);
+  return {
+    cookies: result.cookies,
+    csrfToken: result.csrfToken,
+    userId: result.userId,
+  };
+};
+
 export const clearAuthCache = () => {
-  tokenCache.clear();
+  authCache.clear();
 };
 
 export const clearAuthCacheForUser = (email) => {
-  tokenCache.delete(email);
+  authCache.delete(email);
 };

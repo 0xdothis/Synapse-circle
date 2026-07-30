@@ -20,16 +20,6 @@ const findActiveContact = (userId, contactId) => {
   });
 };
 
-const ensureUniquePhoneNumber = async (userId, contactId, phoneNumber) => {
-  if (!phoneNumber) return null;
-  return TrustedContact.findOne({
-    userId,
-    phoneNumber,
-    isActive: true,
-    _id: { $ne: contactId },
-  });
-};
-
 const syncPrimaryContactAfterUpdate = async (
   userId,
   contactId,
@@ -83,31 +73,10 @@ const syncPrimaryContactAfterDelete = async (userId, contactId) => {
  *     responses:
  *       200:
  *         description: Contacts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 contacts:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/TrustedContact'
- *                 count:
- *                   type: integer
- *                   example: 2
- *                 maxContacts:
- *                   type: integer
- *                   example: 3
- *                 canAddMore:
- *                   type: boolean
- *                   example: true
  *       401:
  *         description: Unauthorized
  */
-router.get("/", authenticate, verifyCsrfToken, async (req, res, next) => {
+router.get("/", authenticate, async (req, res, next) => {
   try {
     const contacts = await TrustedContact.find({
       userId: req.userId,
@@ -137,26 +106,9 @@ router.get("/", authenticate, verifyCsrfToken, async (req, res, next) => {
  *     tags: [Contacts]
  *     security:
  *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/CreateContactRequest'
  *     responses:
  *       201:
  *         description: Contact added successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 contact:
- *                   $ref: '#/components/schemas/TrustedContact'
  *       400:
  *         description: Max contacts reached or validation error
  *       401:
@@ -171,10 +123,24 @@ router.post(
   contactLimiter,
   validate(contactValidation.create),
   async (req, res, next) => {
-    const { name, phoneNumber, email, relationship } = req.body;
+    const { name, email, relationship } = req.body;
     const userId = req.userId;
 
-    // Check max contacts limit
+    // Check if contact already exists for this user (by email)
+    const existingContact = await TrustedContact.findOne({
+      userId,
+      email: email.toLowerCase().trim(),
+      isActive: true,
+    });
+
+    if (existingContact) {
+      return res.status(409).json({
+        success: false,
+        message: "Contact already exists",
+        contact: existingContact,
+      });
+    }
+
     const existingContacts = await TrustedContact.countDocuments({
       userId,
       isActive: true,
@@ -187,33 +153,21 @@ router.post(
         maxContacts: config.maxTrustedContacts,
       });
     }
-    // Check if contact already exists
-    const existingContact = await TrustedContact.findOne({
-      userId,
-      phoneNumber,
-      isActive: true,
-    });
 
-    if (existingContact) {
-      return res.status(409).json({
-        success: false,
-        message: "Contact already exists",
-        contact: existingContact,
-      });
-    }
-
-    // If this is the first contact, make it primary
     const isPrimary = existingContacts === 0;
     const contact = await TrustedContact.create({
       userId,
-      name,
-      phoneNumber,
-      email,
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
       relationship,
       isPrimary,
     });
 
-    logger.info(`New trusted contact added for user ${userId}: ${phoneNumber}`);
+    logger.info(`New trusted contact added for user ${userId}:`, {
+      contactId: contact._id,
+      name: contact.name,
+      email: contact.email,
+    });
 
     res.status(201).json({
       success: true,
@@ -228,49 +182,12 @@ router.post(
  * /api/contacts/{contactId}:
  *   put:
  *     summary: Update a trusted contact
- *     description: Updates an existing trusted contact
  *     tags: [Contacts]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: contactId
- *         required: true
- *         schema:
- *           type: string
- *         description: Contact ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               name:
- *                 type: string
- *               phoneNumber:
- *                 type: string
- *               email:
- *                 type: string
- *               relationship:
- *                 type: string
- *                 enum: [parent, sibling, friend, roommate, partner, other]
- *               isPrimary:
- *                 type: boolean
  *     responses:
  *       200:
  *         description: Contact updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 contact:
- *                   $ref: '#/components/schemas/TrustedContact'
  *       401:
  *         description: Unauthorized
  *       404:
@@ -283,10 +200,9 @@ router.put(
   validate(contactValidation.update),
   asyncHandler(async (req, res) => {
     const { contactId } = req.params;
-    const { name, phoneNumber, email, relationship, isPrimary } = req.body;
+    const { name, email, relationship, isPrimary } = req.body;
     const userId = req.userId;
 
-    // Find contact
     const contact = await findActiveContact(userId, contactId);
 
     if (!contact) {
@@ -296,29 +212,27 @@ router.put(
       });
     }
 
-    // Check if phone number is being changed and if it conflicts
-    if (phoneNumber && phoneNumber !== contact.phoneNumber) {
-      const existingContact = await ensureUniquePhoneNumber(
+    // Check for duplicate email if email is being changed
+    if (email && email.toLowerCase().trim() !== contact.email) {
+      const existingContact = await TrustedContact.findOne({
         userId,
-        contactId,
-        phoneNumber,
-      );
+        email: email.toLowerCase().trim(),
+        isActive: true,
+        _id: { $ne: contactId },
+      });
 
       if (existingContact) {
         return res.status(409).json({
           success: false,
-          message: "Another contact with this phone number already exists",
+          message: "Another contact with this email already exists",
         });
       }
     }
 
-    // Update contact
-    if (name) contact.name = name;
-    if (phoneNumber) contact.phoneNumber = phoneNumber;
-    if (email) contact.email = email;
+    if (name) contact.name = name.trim();
+    if (email) contact.email = email.toLowerCase().trim();
     if (relationship) contact.relationship = relationship;
 
-    // Handle primary contact logic
     await syncPrimaryContactAfterUpdate(userId, contactId, contact, isPrimary);
 
     await contact.save();
@@ -342,25 +256,9 @@ router.put(
  *     tags: [Contacts]
  *     security:
  *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: contactId
- *         required: true
- *         schema:
- *           type: string
- *         description: Contact ID
  *     responses:
  *       200:
  *         description: Contact deleted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
  *       401:
  *         description: Unauthorized
  *       404:
@@ -369,11 +267,11 @@ router.put(
 router.delete(
   "/:contactId",
   authenticate,
+  verifyCsrfToken,
   asyncHandler(async (req, res) => {
     const { contactId } = req.params;
     const userId = req.userId;
 
-    // Find contact
     const contact = await TrustedContact.findOne({
       _id: contactId,
       userId,
@@ -387,11 +285,9 @@ router.delete(
       });
     }
 
-    // Soft delete
     contact.isActive = false;
     await contact.save();
 
-    // If this was the primary contact, set a new primary
     if (contact.isPrimary) {
       await syncPrimaryContactAfterDelete(userId, contactId);
     }
@@ -410,26 +306,12 @@ router.delete(
  * /api/contacts/campus-security:
  *   get:
  *     summary: Get campus security contacts
- *     description: Returns all active campus security contacts
  *     tags: [Contacts]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Campus security contacts retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 securityContacts:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/CampusSecurity'
- *                 count:
- *                   type: integer
  *       401:
  *         description: Unauthorized
  */
