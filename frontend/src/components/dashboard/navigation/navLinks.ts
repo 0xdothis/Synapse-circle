@@ -11,21 +11,25 @@ export interface NavLinkItem {
 export const navLinks = [
   {
     label: "Home",
+    to: "/dashboard",
     sectionId: "home",
     icon: Home01Icon
   },
   {
     label: "Directory",
+    to: "/dashboard/directory",
     sectionId: "directory",
     icon: Hospital02Icon
   },
   {
     label: "Alerts",
+    to: "/dashboard/history",
     sectionId: "alerts",
     icon: Clock02Icon
   },
   {
-    label: "Profile",
+    label: "Profile",  
+    to: "/dashboard/profile",
     sectionId: "profile",
     icon:UserSettings01Icon
   },
