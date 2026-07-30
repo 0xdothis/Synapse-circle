@@ -86,7 +86,7 @@ function SchoolForm() {
         </form >
 
       </div>
-      <Button className="mt-auto" onClick={() => navigate("/dasboard")}>Continue</Button>
+      <Button className="mt-auto" onClick={() => navigate("/dashboard")}>Continue</Button>
     </div >
   )
 }
