@@ -10,6 +10,7 @@ export const signupUser = async (data: signupDTO): Promise<SignupResponse> => {
 
     const res = await fetch("https://synap-circle.onrender.com/api/auth/signup", {
         method: "POST",
+        credentials: "include",
         headers: {
             "Content-Type": "application/json",
 
@@ -44,6 +45,7 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
     const res = await fetch(`https://synap-circle.onrender.com/api/auth/verify-otp`, {
       method: "POST",
+        credentials: "include",
       headers: {
         "Content-Type": "application/json",
         "x-csrf-token": `${token.state.onboardingToken}`
@@ -131,9 +133,10 @@ export const onboardingRegistration = async(onboardingInfo: {
     
     const res = await fetch("https://synap-circle.onrender.com/api/auth/onboarding-step", {
         method: "PATCH",
+        credentials: "include",
         headers: {
             "Content-Type": "application/json",
-            "x-csrf-token": `${token.state.onboardingToken}`
+            "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YTZjOTE0YTVlNjM5M2ZiMzUxM2NhN2EiLCJlbWFpbCI6ImFjaWVudGd1cnVAZ21haWwuY29tIiwicm9sZSI6InVzZXIiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc4NTUwMDAwNCwiZXhwIjoxNzg1ODQ1NjA0LCJqdGkiOiJjMjRlZTY0Mi0wYjUzLTRlMDEtYjBjYy1lODVkNzY0MzE5MjEifQ.FAMnAhlR3aouMzg6JDhqYO2Qojlm-nBwLxF_Twd`
         },
         body: JSON.stringify(reqData)
     })
@@ -151,6 +154,7 @@ export const loginWithGoogle = async (credential: string) => {
     
     const res = await fetch("https://synap-circle.onrender.com/api/auth/google", {
         method: "POST",
+        credentials: "include",
         headers: {
             "Content-Type": "application/json"
         },

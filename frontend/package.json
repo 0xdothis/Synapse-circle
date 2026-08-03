@@ -23,7 +23,6 @@
     "framer-motion": "^12.42.2",
     "immer": "^11.1.15",
     "input-otp": "^1.4.2",
-    "jwt-decode": "^4.0.0",
     "mixpanel-browser": "^2.81.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
