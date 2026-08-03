@@ -14,14 +14,6 @@ const baseCookieOptions = {
 
 /**
  * Native apps identify themselves with this header on every request.
- * They get raw tokens in the JSON body (stored in Keychain/Keystore on
- * the client) instead of cookies, and are exempt from CSRF checks since
- * they aren't relying on ambient browser credentials.
- *
- * IMPORTANT: this header is just a routing hint, not a trust boundary —
- * do not use it anywhere as an authorization decision. The actual CSRF
- * bypass for authenticated routes is keyed off the presence of a Bearer
- * token (see verifyCsrfToken below), which a browser page cannot forge.
  */
 export const isMobileClient = (req) =>
   req.headers["x-client-type"] === "mobile";
@@ -43,18 +35,7 @@ export const generateAccessToken = (userId, email, role = "user") => {
 };
 
 /**
- * Refresh tokens carry a `jti` (JWT ID) so the session can be looked up,
- * rotated, and revoked server-side — see services/sessionService.js.
- * A bare JWT with no server-side record can never truly be revoked
- * (logout / password-change previously only cleared cookies, which did
- * nothing for a token that had already left the browser).
- *
- * BUGFIX: this previously read `config.jwtRefreshSecret` /
- * `config.jwtRefreshExpiresIn`, which don't exist on the config object
- * (config.js defines `refreshSecret` / `refreshExpiresIn`). As a result
- * refresh tokens silently fell back to signing with the *access* token
- * secret whenever REFRESH_TOKEN_SECRET wasn't set in the environment —
- * i.e. access and refresh tokens shared one secret in most deployments.
+ * Refresh tokens carry a `jti` (JWT ID) so the session can be looked up
  */
 export const generateRefreshToken = (userId, email, role = "user") => {
   const jti = crypto.randomUUID();
@@ -123,14 +104,7 @@ export const generateCsrfToken = (res) => {
 };
 
 export const verifyCsrfToken = (req, res, next) => {
-  // Native app: no ambient cookie is being sent on its behalf by a
-  // browser, so cross-site request forgery doesn't apply to it.
   if (isMobileClient(req)) return next();
-
-  // Any request already carrying an explicit Bearer credential was built
-  // deliberately by client code (a browser page cannot attach an
-  // Authorization header to a forged cross-site request), so it isn't
-  // exploitable via CSRF either.
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) return next();
 

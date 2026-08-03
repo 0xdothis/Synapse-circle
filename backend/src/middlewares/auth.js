@@ -7,10 +7,7 @@ import {
 
 /**
  * Reads the access token from the httpOnly cookie (web clients) or the
- * Authorization header (native mobile clients — see tokenService.js for
- * how tokens are issued differently per platform). This dual support is
- * intentional given the API serves both a browser frontend and a native
- * app; it's what verifyCsrfToken's Bearer-header bypass relies on.
+ * Authorization header
  */
 const extractToken = (req) => {
   const cookieToken = getAccessTokenFromCookie(req);
@@ -61,6 +58,20 @@ const resolveUserFromToken = async (token) => {
     };
   }
 
+  if (
+    user.passwordChangedAt &&
+    decoded.iat * 1000 < user.passwordChangedAt.getTime()
+  ) {
+    return {
+      errorStatus: 401,
+      errorBody: {
+        success: false,
+        message: "Session invalidated. Please log in again.",
+        code: "TOKEN_INVALIDATED",
+      },
+    };
+  }
+
   return { user };
 };
 
@@ -73,7 +84,7 @@ const mapAuthError = (error) => {
       status: 401,
       body: {
         success: false,
-        message: "Invalid token. Please log in again.",
+        message: "Invalid json web token. Please log in again.",
         code: "INVALID_TOKEN",
       },
     };

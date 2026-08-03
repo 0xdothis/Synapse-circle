@@ -721,6 +721,30 @@ const options = {
                 },
                 universityId: { type: "string" },
                 selectedUniversity: { type: "string" },
+                contacts: {
+                  type: "array",
+                  description:
+                    "Array of contacts to add (only for 'contacts' step)",
+                  items: {
+                    type: "object",
+                    required: ["name", "email", "relationship"],
+                    properties: {
+                      name: { type: "string", maxLength: 100 },
+                      email: { type: "string", format: "email" },
+                      relationship: {
+                        type: "string",
+                        enum: [
+                          "parent",
+                          "sibling",
+                          "friend",
+                          "roommate",
+                          "partner",
+                          "other",
+                        ],
+                      },
+                    },
+                  },
+                },
               },
             },
           },

@@ -25,6 +25,9 @@ const config = {
   refreshSecret: process.env.REFRESH_SECRET,
   refreshExpiresIn: process.env.REFRESH_EXPIRE || "4d",
 
+  googleClientId: process.env.GOOGLE_CLIENT_ID,
+  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+
   disableEmailSending: process.env.DISABLE_EMAIL_SENDING === "true",
   disableRateLimiting: process.env.DISABLE_RATE_LIMITING === "true",
 

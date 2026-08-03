@@ -873,7 +873,7 @@ class EmailService {
           </div>
 
           <div class="welcome-box">
-            <h2>👋 Welcome ${user.name || user.phoneNumber}!</h2>
+            <h2>👋 Welcome ${user.name || user.email}!</h2>
             <p style="margin: 10px 0 0;">Your campus safety journey begins now</p>
           </div>
           
@@ -942,7 +942,7 @@ class EmailService {
       sendSmtpEmail.textContent = `
       Welcome to SafeWalk Campus!
 
-      Hello ${user.name || user.phoneNumber},
+      Hello ${user.name || user.email},
 
       Your campus safety journey begins now! Here's what you can do:
 
@@ -968,9 +968,7 @@ class EmailService {
         name: this.senderName,
         email: this.fromEmail,
       };
-      sendSmtpEmail.to = [
-        { email: user.email, name: user.name || user.phoneNumber },
-      ];
+      sendSmtpEmail.to = [{ email: user.email, name: user.name }];
       sendSmtpEmail.replyTo = {
         email: this.fromEmail,
         name: "SafeWalk Campus Support",
@@ -987,7 +985,6 @@ class EmailService {
       };
     } catch (error) {
       logger.error("Welcome email send error:", error);
-      // Don't throw - welcome email failure shouldn't block signup
       return {
         success: false,
         message: "Failed to send welcome email",

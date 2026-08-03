@@ -8,17 +8,18 @@ import compression from "compression";
 import swaggerUi from "swagger-ui-express";
 import mongoSanitize from "express-mongo-sanitize";
 import { swaggerSpec } from "./src/config/swagger.js";
-import authRoutes from "./src/routes/auth.js";
-import contactRoutes from "./src/routes/contacts.js";
-import emergencyRoutes from "./src/routes/emergency.js";
-import sosRoutes from "./src/routes/sos.js";
-import profileRoutes from "./src/routes/profile.js";
+import authRoutes from "./src/routes/auth.routes.js";
+import contactRoutes from "./src/routes/contacts.routes.js";
+import emergencyRoutes from "./src/routes/emergency.routes.js";
+import sosRoutes from "./src/routes/sos.routes.js";
+import profileRoutes from "./src/routes/profile.routes.js";
 import { errorHandler } from "./src/middlewares/errorHandler.js";
 import { globalLimiter } from "./src/middlewares/rateLimiter.js";
 import { logger } from "./src/utils/logger.js";
 import cookieParser from "cookie-parser";
 
 const app = express();
+
 app.use(cookieParser());
 
 const connectDB = async () => {
@@ -41,8 +42,28 @@ const connectDB = async () => {
 };
 
 // CORS Configuration
+const allowedOrigins = [
+  "https://synapse-circle-tau.vercel.app",
+  "https://synap-circle.onrender.com",
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:5173",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+];
+
 const corsOptions = {
-  origin: "*",
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`🚫 CORS blocked origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
+  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
   allowedHeaders: [
     "Content-Type",
@@ -55,14 +76,15 @@ const corsOptions = {
     "X-Request-ID",
     "Cookie",
   ],
-  exposedHeaders: ["X-Request-ID"],
+  exposedHeaders: ["X-Request-ID", "Set-Cookie"],
   maxAge: 86400,
   preflightContinue: false,
   optionsSuccessStatus: 204,
 };
 
 console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
-console.log("🔒 CORS: Open (wildcard - all origins allowed)");
+console.log(`🔒 CORS: Allowed origins: ${allowedOrigins.join(", ")}`);
+console.log(`🔒 CORS: Credentials: ${corsOptions.credentials}`);
 
 app.use(
   helmet({
@@ -82,6 +104,7 @@ app.use((req, res, next) => {
   console.log(
     `📨 ${req.method} ${req.path} | Origin: ${origin || "No origin"}`,
   );
+  console.log(`🍪 Cookies: ${req.headers.cookie ? "Present ✅" : "None ❌"}`);
   next();
 });
 
