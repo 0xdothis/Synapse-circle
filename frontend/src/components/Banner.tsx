@@ -1,7 +1,6 @@
 import Button from "@/components/ui/button";
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import mobile_sos from "../assets/home/mobile-sos.svg";
 
 import { useNavigate } from "react-router";
 
@@ -20,7 +19,12 @@ function Banner() {
         <Button className="bg-brand-50 text-primary gap-2 w-full lg:w-75" onClick={() => navigate("/signup")}>Create your account <HugeiconsIcon icon={ArrowRight01Icon} size={24} /></Button>
       </div>
       <div className="self-center">
-        <img src={mobile_sos} alt="doodles on a background" />
+        <picture>
+          <source type="image/png" srcSet="
+            /home/mobile_sos.png 1x, /home/mobile_sos@2x.png 2x, /home/mobile_sos@3x.png 3x
+            " />
+          <img src="/home/mobile_sos.png" alt="doodles on a background" />
+        </picture>
       </div>
 
     </div>

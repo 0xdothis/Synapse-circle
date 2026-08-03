@@ -19,7 +19,7 @@ function Template({ heading, description, image, icon, children }: TemplateProps
   return (
     <div className="flex flex-col flex-1">
 
-      <div className="space-y-8 flex flex-col items-center text-center mt-auto">
+      <div className="space-y-8 flex flex-col items-center text-center my-auto">
         {image && <div className="h-32">
           <img src={image} alt="safewalk logo light" className="h-full" />
         </div>}

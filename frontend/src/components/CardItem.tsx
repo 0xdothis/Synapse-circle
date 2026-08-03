@@ -10,7 +10,7 @@ function CardItem({ title, description, children }: CardType) {
 
   return (
     <div className="p-4 space-y-3 bg-white rounded-2xl">
-      <span className={`${typeof children === "string" ? "" : "bg-brand-100 h-12 w-12  flex items-center justify-center"} text-primary rounded-2xl text-sm font-semibold`}>
+      <span className={`${typeof children === "string" ? "" : "bg-brand-100 h-12 w-12 text-primary flex items-center justify-center"} text-primary rounded-2xl text-sm font-semibold`}>
         {children}
       </span>
       <div className="space-y-2">

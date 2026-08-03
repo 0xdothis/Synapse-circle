@@ -50,7 +50,7 @@ const MobileNav = ({ isOpen, onClose }: MobileNavProps) => {
 
             <div className="mt-8 flex flex-col gap-3">
               <Link
-                to="/login"
+                to="/auth/login"
                 onClick={onClose}
                 variant="secondary"
 
