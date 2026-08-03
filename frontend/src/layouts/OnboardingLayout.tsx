@@ -33,8 +33,8 @@ function OnboardingLayout() {
 
 
 
-      <section className="flex-1 flex flex-col px-4 py-8 lg:items-center lg:justify-center min-h-0 lg:overflow-y-auto">
-        <div className="w-full flex flex-1 flex-col lg:max-w-125 lg:shadow-lg lg:rounded-2xl lg:p-8">
+      <section className="flex-1 flex flex-col px-4 py-8 min-h-0 lg:overflow-y-auto">
+        <div className="w-full flex flex-1 flex-col lg:max-w-125 lg:shadow-lg lg:rounded-2xl lg:p-8 lg:m-auto">
           <div className="flex justify-between items-center lg:-mx-4">
             <Button onClick={() => navigate(-1)} variant="ghost" size="sm">
               <HugeiconsIcon icon={ArrowLeft02Icon} /> Back
