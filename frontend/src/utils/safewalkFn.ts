@@ -136,7 +136,7 @@ export const onboardingRegistration = async(onboardingInfo: {
         credentials: "include",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2YTZjOTE0YTVlNjM5M2ZiMzUxM2NhN2EiLCJlbWFpbCI6ImFjaWVudGd1cnVAZ21haWwuY29tIiwicm9sZSI6InVzZXIiLCJ0eXBlIjoicmVmcmVzaCIsImlhdCI6MTc4NTUwMDAwNCwiZXhwIjoxNzg1ODQ1NjA0LCJqdGkiOiJjMjRlZTY0Mi0wYjUzLTRlMDEtYjBjYy1lODVkNzY0MzE5MjEifQ.FAMnAhlR3aouMzg6JDhqYO2Qojlm-nBwLxF_Twd`
+            "Authorization": `Bearer ${token.state.onboardingToken}`
         },
         body: JSON.stringify(reqData)
     })
