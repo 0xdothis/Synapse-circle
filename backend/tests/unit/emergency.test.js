@@ -81,8 +81,7 @@ describe("Emergency Directory API Tests", () => {
     it("should get all emergency contacts", async () => {
       const response = await request(app)
         .get("/api/emergency/directory")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -101,8 +100,7 @@ describe("Emergency Directory API Tests", () => {
     it("should filter by type", async () => {
       const response = await request(app)
         .get("/api/emergency/directory?type=hospital")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -114,8 +112,7 @@ describe("Emergency Directory API Tests", () => {
     it("should search by name", async () => {
       const response = await request(app)
         .get("/api/emergency/directory?search=General")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -157,8 +154,7 @@ describe("Emergency Directory API Tests", () => {
 
       const response = await request(app)
         .get(`/api/emergency/directory/${contactId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -169,8 +165,7 @@ describe("Emergency Directory API Tests", () => {
     it("should return 404 for non-existent contact", async () => {
       const response = await request(app)
         .get("/api/emergency/directory/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -185,8 +180,7 @@ describe("Emergency Directory API Tests", () => {
     it("should return error without latitude", async () => {
       const response = await request(app)
         .get("/api/emergency/nearby?longitude=-122.4194")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(400);
 
       expect(response.body).toHaveProperty("success", false);
@@ -199,8 +193,7 @@ describe("Emergency Directory API Tests", () => {
     it("should return error without longitude", async () => {
       const response = await request(app)
         .get("/api/emergency/nearby?latitude=37.7749")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(400);
 
       expect(response.body).toHaveProperty("success", false);
@@ -215,8 +208,7 @@ describe("Emergency Directory API Tests", () => {
         .get(
           "/api/emergency/nearby?latitude=37.7749&longitude=-122.4194&radius=5000",
         )
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);

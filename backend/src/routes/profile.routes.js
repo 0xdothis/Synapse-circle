@@ -1,6 +1,5 @@
 import express from "express";
 import { authenticate } from "../middlewares/auth.js";
-import { verifyCsrfToken } from "../utils/tokenService.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { validate } from "../middlewares/validator.js";
 import { body } from "express-validator";
@@ -58,7 +57,6 @@ router.get("/me", authenticate, asyncHandler(profileController.getProfile));
 router.post(
   "/picture",
   authenticate,
-  verifyCsrfToken,
   profileController.handleUploadErrors(uploadProfilePicture),
   asyncHandler(profileController.uploadPicture),
 );
@@ -76,7 +74,6 @@ router.post(
 router.delete(
   "/picture",
   authenticate,
-  verifyCsrfToken,
   asyncHandler(profileController.deletePicture),
 );
 
@@ -99,7 +96,6 @@ router.delete(
 router.put(
   "/me",
   authenticate,
-  verifyCsrfToken,
   validate([
     body("name").optional().isString().isLength({ max: 100 }),
     body("email").optional().isEmail(),
@@ -124,7 +120,6 @@ router.put(
 router.put(
   "/name",
   authenticate,
-  verifyCsrfToken,
   validate([
     body("name")
       .notEmpty()
@@ -147,7 +142,6 @@ router.put(
 router.put(
   "/email",
   authenticate,
-  verifyCsrfToken,
   validate([body("email").isEmail().withMessage("Valid email is required")]),
   asyncHandler(profileController.updateEmail),
 );

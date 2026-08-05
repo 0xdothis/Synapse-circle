@@ -1,6 +1,5 @@
 import express from "express";
 import { body } from "express-validator";
-
 import authController from "../controllers/auth.controller.js";
 import { validate, authValidation } from "../middlewares/validator.js";
 import { authenticate } from "../middlewares/auth.js";
@@ -10,39 +9,12 @@ import {
   apiLimiter,
 } from "../middlewares/rateLimiter.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { verifyCsrfToken } from "../utils/tokenService.js";
 import { validateContact } from "../utils/contactHelper.js";
 import authService from "../services/auth.service.js";
 
 const { STEP_ORDER } = authService;
 
 const router = express.Router();
-
-/**
- * @swagger
- * /api/auth/csrf-token:
- *   get:
- *     summary: Get a CSRF token
- *     description: Issues a CSRF token for web clients to use in mutating requests. The token is returned in the response body and also set as a non-httpOnly cookie.
- *     tags: [Authentication]
- *     security: []
- *     responses:
- *       200:
- *         description: CSRF token issued successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 csrfToken:
- *                   type: string
- *                   example: "a1b2c3d4e5f6..."
- *       400:
- *         description: Invalid request
- *       500:
- *         description: Server error
- */
-router.get("/csrf-token", authController.getCsrfToken);
 
 /**
  * @swagger
@@ -89,7 +61,7 @@ router.post(
  * /api/auth/login:
  *   post:
  *     summary: Login with email and password
- *     description: Authenticates a user with email and password. Web clients receive httpOnly cookies; mobile clients receive access/refresh tokens.
+ *     description: Authenticates a user with email and password. Returns accessToken and refreshToken in the response body.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -141,7 +113,7 @@ router.post(
  * /api/auth/verify-otp:
  *   post:
  *     summary: Verify OTP and complete authentication
- *     description: Verifies the OTP sent to the user's email. On success, creates a session and sets authentication cookies (web) or returns tokens (mobile).
+ *     description: Verifies the OTP sent to the user's email. On success, creates a session and returns accessToken/refreshToken.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -178,7 +150,6 @@ router.post(
 router.post(
   "/verify-otp",
   authLimiter,
-  verifyCsrfToken,
   validate(authValidation.verifyOTP),
   authController.verifyOtp,
 );
@@ -221,8 +192,6 @@ router.post(
  *                 isNewUser:
  *                   type: boolean
  *                   example: false
- *                 csrfToken:
- *                   type: string
  *                 accessToken:
  *                   type: string
  *                 refreshToken:
@@ -249,7 +218,6 @@ router.post(
 router.post(
   "/google",
   authLimiter,
-  verifyCsrfToken,
   validate([
     body("idToken").notEmpty().withMessage("Google ID token is required"),
   ]),
@@ -261,10 +229,10 @@ router.post(
  * /api/auth/refresh-token:
  *   post:
  *     summary: Refresh access token
- *     description: Exchanges a valid refresh token for a new access token. Refresh tokens are rotated on every use. Reusing a revoked token triggers session revocation.
+ *     description: Exchanges a valid refresh token for a new access/refresh token pair. Refresh tokens are rotated on every use. Reusing a revoked token triggers session revocation.
  *     tags: [Authentication]
  *     requestBody:
- *       required: false
+ *       required: true
  *       content:
  *         application/json:
  *           schema:
@@ -295,12 +263,7 @@ router.post(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post(
-  "/refresh-token",
-  apiLimiter,
-  verifyCsrfToken,
-  authController.refreshToken,
-);
+router.post("/refresh-token", apiLimiter, authController.refreshToken);
 
 /**
  * @swagger
@@ -356,7 +319,6 @@ router.post(
 router.post(
   "/resend-otp",
   otpLimiter,
-  verifyCsrfToken,
   validate(authValidation.resendOTP),
   authController.resendOtp,
 );
@@ -366,7 +328,7 @@ router.post(
  * /api/auth/logout:
  *   post:
  *     summary: Logout user
- *     description: Revokes the current refresh token and clears session cookies. Mobile clients should discard stored tokens on receiving 200.
+ *     description: Revokes the given refresh token. Clients should discard stored tokens on receiving 200.
  *     tags: [Authentication]
  *     security:
  *       - bearerAuth: []
@@ -379,7 +341,7 @@ router.post(
  *             properties:
  *               refreshToken:
  *                 type: string
- *                 description: Refresh token to revoke (required for mobile clients)
+ *                 description: Refresh token to revoke
  *     responses:
  *       200:
  *         description: Logged out successfully
@@ -401,12 +363,7 @@ router.post(
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post(
-  "/logout",
-  authenticate,
-  verifyCsrfToken,
-  asyncHandler(authController.logout),
-);
+router.post("/logout", authenticate, asyncHandler(authController.logout));
 
 /**
  * @swagger
@@ -452,7 +409,6 @@ router.post(
 router.patch(
   "/onboarding-step",
   authenticate,
-  verifyCsrfToken,
   validate([
     body("step")
       .notEmpty()
@@ -602,7 +558,6 @@ router.get("/me", authenticate, authController.getMe);
 router.post(
   "/forgot-password",
   otpLimiter,
-  verifyCsrfToken,
   validate([
     body("email")
       .notEmpty()
@@ -670,7 +625,6 @@ router.post(
 router.post(
   "/verify-reset-otp",
   authLimiter,
-  verifyCsrfToken,
   validate([
     body("email")
       .notEmpty()
@@ -743,7 +697,6 @@ router.post(
 router.post(
   "/reset-password",
   authLimiter,
-  verifyCsrfToken,
   validate([
     body("resetToken").notEmpty().withMessage("Reset token is required"),
     body("newPassword")
@@ -819,7 +772,6 @@ router.post(
 router.post(
   "/change-password",
   authenticate,
-  verifyCsrfToken,
   validate([
     body("currentPassword")
       .notEmpty()

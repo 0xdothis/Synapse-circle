@@ -15,7 +15,7 @@ export const getAuthToken = async (testUser) => {
     password: testUser.password || "TestPassword123",
   };
 
-  // Sign up - phone number removed
+  // Sign up
   const signupResponse = await request(app)
     .post("/api/auth/signup")
     .send({
@@ -27,7 +27,7 @@ export const getAuthToken = async (testUser) => {
 
   const otpCode = signupResponse.body.development_otp;
 
-  // Verify OTP
+  // Verify OTP — returns accessToken/refreshToken directly in the body
   const verifyResponse = await request(app)
     .post("/api/auth/verify-otp")
     .send({
@@ -36,36 +36,23 @@ export const getAuthToken = async (testUser) => {
     })
     .expect(200);
 
-  const cookies = verifyResponse.headers["set-cookie"];
-  const csrfToken = verifyResponse.body.csrfToken;
+  const { accessToken, refreshToken } = verifyResponse.body;
 
-  if (!cookies || !csrfToken) {
-    throw new Error("Failed to get auth cookies or CSRF token");
+  if (!accessToken || !refreshToken) {
+    throw new Error("Failed to get auth tokens");
   }
 
   const result = {
-    token: verifyResponse.body.token || null,
-    csrfToken: csrfToken,
-    cookies: cookies,
+    accessToken,
+    refreshToken,
     userId: verifyResponse.body.user.id,
     user: verifyResponse.body.user,
-    getHeaders: () => ({
-      Cookie: cookies.join("; "),
-      "x-csrf-token": csrfToken,
-    }),
+    // Convenience helper for tests that prefer .set(authData.getHeaders())
+    getHeaders: () => ({ Authorization: `Bearer ${accessToken}` }),
   };
 
   authCache.set(cacheKey, result);
   return result;
-};
-
-export const getAuthCookies = async (testUser) => {
-  const result = await getAuthToken(testUser);
-  return {
-    cookies: result.cookies,
-    csrfToken: result.csrfToken,
-    userId: result.userId,
-  };
 };
 
 export const clearAuthCache = () => {

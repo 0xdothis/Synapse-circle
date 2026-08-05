@@ -1,23 +1,13 @@
 import authService from "../services/auth.service.js";
 import { logger } from "../utils/logger.js";
-import {
-  setAccessTokenCookie,
-  setRefreshTokenCookie,
-  clearTokenCookies,
-  generateCsrfToken,
-  getRefreshTokenFromCookie,
-  isMobileClient,
-} from "../utils/tokenService.js";
 
-const getIncomingRefreshToken = (req) =>
-  isMobileClient(req)
-    ? req.body?.refreshToken || null
-    : getRefreshTokenFromCookie(req);
+const getIncomingRefreshToken = (req) => req.body?.refreshToken || null;
 
 /**
  * Session response strategy
- * Web clients (browser, no `X-Client-Type: mobile` header): tokens are
- * NEVER placed in the JSON body. They live only in httpOnly cookies.
+ * All clients (web and mobile) receive accessToken/refreshToken directly
+ * in the JSON body. Clients are responsible for storing them and sending
+ * `Authorization: Bearer <accessToken>` on subsequent requests.
  */
 const respondWithSession = async (
   req,
@@ -30,26 +20,14 @@ const respondWithSession = async (
     { userAgent: req.headers["user-agent"], ip: req.ip },
   );
 
-  const payload = { success: true, message, ...extra, user };
-
-  if (isMobileClient(req)) {
-    payload.accessToken = accessToken;
-    payload.refreshToken = refreshToken;
-  } else {
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
-    payload.csrfToken = generateCsrfToken(res);
-  }
-
-  return res.status(status).json(payload);
-};
-
-/**
- * GET /api/auth/csrf-token
- */
-const getCsrfToken = (req, res) => {
-  const token = generateCsrfToken(res);
-  res.json({ csrfToken: token });
+  return res.status(status).json({
+    success: true,
+    message,
+    ...extra,
+    user,
+    accessToken,
+    refreshToken,
+  });
 };
 
 /**
@@ -68,12 +46,9 @@ const signup = async (req, res, next) => {
       });
     }
 
-    const csrfToken = generateCsrfToken(res);
-
     const response = {
       success: true,
       message: result.message,
-      csrfToken,
     };
 
     if (result.developmentOtp) {
@@ -216,7 +191,6 @@ const refreshToken = async (req, res, next) => {
     });
 
     if (result.error === "REUSED") {
-      clearTokenCookies(res);
       return res.status(401).json({
         success: false,
         message:
@@ -226,7 +200,6 @@ const refreshToken = async (req, res, next) => {
     }
 
     if (result.error === "INVALID") {
-      clearTokenCookies(res);
       return res.status(401).json({
         success: false,
         message: "Invalid or expired refresh token. Please log in again.",
@@ -247,22 +220,13 @@ const refreshToken = async (req, res, next) => {
 
     const { user } = result;
 
-    const payload = {
+    res.status(200).json({
       success: true,
       message: "Tokens refreshed successfully",
       user: authService.buildUserResponse(user),
-    };
-
-    if (isMobileClient(req)) {
-      payload.accessToken = result.accessToken;
-      payload.refreshToken = result.refreshToken;
-    } else {
-      setAccessTokenCookie(res, result.accessToken);
-      setRefreshTokenCookie(res, result.refreshToken);
-      payload.csrfToken = generateCsrfToken(res);
-    }
-
-    res.status(200).json(payload);
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
   } catch (error) {
     next(error);
   }
@@ -302,8 +266,6 @@ const logout = async (req, res) => {
   const incomingRefreshToken = getIncomingRefreshToken(req);
 
   await authService.logout(req.userId, incomingRefreshToken);
-
-  clearTokenCookies(res);
 
   logger.info("User logged out", {
     userId: req.userId,
@@ -491,8 +453,6 @@ const changePassword = async (req, res, next) => {
       });
     }
 
-    clearTokenCookies(res);
-
     res.status(200).json({
       success: true,
       message: "Password changed successfully. Please log in again.",
@@ -503,7 +463,6 @@ const changePassword = async (req, res, next) => {
 };
 
 export default {
-  getCsrfToken,
   signup,
   login,
   verifyOtp,

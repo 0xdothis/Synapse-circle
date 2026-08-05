@@ -11,9 +11,6 @@ describe("Authentication Integration Tests", () => {
     password: "TestPassword123",
   };
 
-  let authData = {};
-  let csrfToken = "";
-
   describe("Full Authentication Flow", () => {
     it("should complete the entire signup → verify OTP → login → logout flow", async () => {
       // 1. Signup
@@ -24,15 +21,12 @@ describe("Authentication Integration Tests", () => {
 
       expect(signupRes.body).toHaveProperty("success", true);
       expect(signupRes.body).toHaveProperty("development_otp");
-      expect(signupRes.body).toHaveProperty("csrfToken");
 
-      csrfToken = signupRes.body.csrfToken;
       const otpCode = signupRes.body.development_otp;
 
       // 2. Verify OTP
       const verifyRes = await request(app)
         .post("/api/auth/verify-otp")
-        .set("x-csrf-token", csrfToken)
         .send({
           email: testUser.email,
           otpCode: otpCode,
@@ -42,18 +36,15 @@ describe("Authentication Integration Tests", () => {
       expect(verifyRes.body).toHaveProperty("success", true);
       expect(verifyRes.body).toHaveProperty("user");
       expect(verifyRes.body.user).toHaveProperty("isVerified", true);
-      expect(verifyRes.body).toHaveProperty("csrfToken");
+      expect(verifyRes.body).toHaveProperty("accessToken");
+      expect(verifyRes.body).toHaveProperty("refreshToken");
 
-      const cookies = verifyRes.headers["set-cookie"];
-      expect(cookies).toBeDefined();
-      expect(cookies.some((c) => c.includes("accessToken"))).toBe(true);
-      expect(cookies.some((c) => c.includes("refreshToken"))).toBe(true);
+      const { accessToken, refreshToken } = verifyRes.body;
 
       // 3. Get user profile
       const meRes = await request(app)
         .get("/api/auth/me")
-        .set("Cookie", cookies)
-        .set("x-csrf-token", verifyRes.body.csrfToken)
+        .set("Authorization", `Bearer ${accessToken}`)
         .expect(200);
 
       expect(meRes.body).toHaveProperty("success", true);
@@ -62,8 +53,8 @@ describe("Authentication Integration Tests", () => {
       // 4. Logout
       const logoutRes = await request(app)
         .post("/api/auth/logout")
-        .set("Cookie", cookies)
-        .set("x-csrf-token", verifyRes.body.csrfToken)
+        .set("Authorization", `Bearer ${accessToken}`)
+        .send({ refreshToken })
         .expect(200);
 
       expect(logoutRes.body).toHaveProperty("success", true);
@@ -72,8 +63,17 @@ describe("Authentication Integration Tests", () => {
         "Logged out successfully",
       );
 
-      // 5. Verify logout - should not be able to access protected route
-      await request(app).get("/api/auth/me").set("Cookie", cookies).expect(401);
+      // Note: with stateless access tokens, logout revokes the refresh
+      // token server-side but does not blacklist the still-valid access
+      // token — it simply expires on its own (15m). So we don't assert
+      // 401 here with the old access token; instead verify the refresh
+      // token was actually revoked (can't be used to mint a new session).
+      const refreshAfterLogout = await request(app)
+        .post("/api/auth/refresh-token")
+        .send({ refreshToken })
+        .expect(401);
+
+      expect(refreshAfterLogout.body).toHaveProperty("success", false);
     });
 
     it("should handle concurrent OTP verification attempts", async () => {
@@ -182,38 +182,8 @@ describe("Authentication Integration Tests", () => {
         .expect(200);
 
       expect(loginRes.body).toHaveProperty("success", true);
-    });
-  });
-
-  describe("CSRF Protection", () => {
-    it.skip("should reject requests without CSRF token in production", async () => {
-      // Create a user first
-      const uniqueEmail = `csrf-${Date.now()}@campus.edu`;
-
-      const signupRes = await request(app)
-        .post("/api/auth/signup")
-        .send({ ...testUser, email: uniqueEmail })
-        .expect(200);
-
-      const otpCode = signupRes.body.development_otp;
-
-      const verifyRes = await request(app)
-        .post("/api/auth/verify-otp")
-        .send({
-          email: uniqueEmail,
-          otpCode: otpCode,
-        })
-        .expect(200);
-
-      const cookies = verifyRes.headers["set-cookie"];
-
-      // Try to access protected route without CSRF token
-      const res = await request(app)
-        .post("/api/auth/logout")
-        .set("Cookie", cookies)
-        .expect(403);
-
-      expect(res.body).toHaveProperty("success", false);
+      expect(loginRes.body).toHaveProperty("accessToken");
+      expect(loginRes.body).toHaveProperty("refreshToken");
     });
   });
 
@@ -237,7 +207,7 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(200);
 
-      const cookies = verifyRes.headers["set-cookie"];
+      const { refreshToken } = verifyRes.body;
 
       // Wait a moment
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -245,37 +215,73 @@ describe("Authentication Integration Tests", () => {
       // Refresh token
       const refreshRes = await request(app)
         .post("/api/auth/refresh-token")
-        .set("Cookie", cookies)
-        .set("x-csrf-token", verifyRes.body.csrfToken)
+        .send({ refreshToken })
         .expect(200);
 
       expect(refreshRes.body).toHaveProperty("success", true);
-      expect(refreshRes.body).toHaveProperty("csrfToken");
+      expect(refreshRes.body).toHaveProperty("accessToken");
+      expect(refreshRes.body).toHaveProperty("refreshToken");
 
       // Verify new tokens work
       const meRes = await request(app)
         .get("/api/auth/me")
-        .set("Cookie", refreshRes.headers["set-cookie"])
-        .set("x-csrf-token", refreshRes.body.csrfToken)
+        .set("Authorization", `Bearer ${refreshRes.body.accessToken}`)
         .expect(200);
 
       expect(meRes.body).toHaveProperty("success", true);
+    });
+
+    it("should reject reuse of a rotated refresh token", async () => {
+      const uniqueEmail = `refresh-reuse-${Date.now()}@campus.edu`;
+
+      const signupRes = await request(app)
+        .post("/api/auth/signup")
+        .send({ ...testUser, email: uniqueEmail })
+        .expect(200);
+
+      const verifyRes = await request(app)
+        .post("/api/auth/verify-otp")
+        .send({
+          email: uniqueEmail,
+          otpCode: signupRes.body.development_otp,
+        })
+        .expect(200);
+
+      const { refreshToken: firstRefreshToken } = verifyRes.body;
+
+      // Use it once — rotates to a new refresh token
+      await request(app)
+        .post("/api/auth/refresh-token")
+        .send({ refreshToken: firstRefreshToken })
+        .expect(200);
+
+      // Reusing the now-rotated-away token should be rejected
+      const reuseRes = await request(app)
+        .post("/api/auth/refresh-token")
+        .send({ refreshToken: firstRefreshToken })
+        .expect(401);
+
+      expect(reuseRes.body).toHaveProperty("success", false);
+    });
+
+    it("should require a refresh token in the request body", async () => {
+      const res = await request(app)
+        .post("/api/auth/refresh-token")
+        .send({})
+        .expect(401);
+
+      expect(res.body).toHaveProperty("success", false);
+      expect(res.body).toHaveProperty(
+        "message",
+        "Refresh token required. Please log in.",
+      );
     });
   });
 
   describe("Google OAuth Integration", () => {
     it("should handle Google sign-in flow", async () => {
-      // Mock Google token verification
-      const mockGooglePayload = {
-        sub: "google-123",
-        email: "google@campus.edu",
-        name: "Google User",
-        picture: "https://example.com/pic.jpg",
-        email_verified: true,
-      };
-
       // Since we can't actually verify Google tokens in tests,
-      // we'll test the route with a mock
+      // we'll test the route with a mock (invalid) token.
       const res = await request(app)
         .post("/api/auth/google")
         .send({ idToken: "mock-google-token" })
@@ -341,13 +347,12 @@ describe("Authentication Integration Tests", () => {
         })
         .expect(200);
 
-      const cookies = verifyRes.headers["set-cookie"];
+      const { accessToken, refreshToken } = verifyRes.body;
 
       // Change password
       const changeRes = await request(app)
         .post("/api/auth/change-password")
-        .set("Cookie", cookies)
-        .set("x-csrf-token", verifyRes.body.csrfToken)
+        .set("Authorization", `Bearer ${accessToken}`)
         .send({
           currentPassword: testUser.password,
           newPassword: "NewPassword789",
@@ -357,8 +362,19 @@ describe("Authentication Integration Tests", () => {
 
       expect(changeRes.body).toHaveProperty("success", true);
 
-      // Old session should be invalidated
-      await request(app).get("/api/auth/me").set("Cookie", cookies).expect(401);
+      // Old access token should be invalidated too — unlike logout, a
+      // password change updates passwordChangedAt, which the auth
+      // middleware checks against the token's issued-at time.
+      await request(app)
+        .get("/api/auth/me")
+        .set("Authorization", `Bearer ${accessToken}`)
+        .expect(401);
+
+      // Old refresh token should no longer be usable
+      await request(app)
+        .post("/api/auth/refresh-token")
+        .send({ refreshToken })
+        .expect(401);
 
       // Login with new password
       const loginRes = await request(app)

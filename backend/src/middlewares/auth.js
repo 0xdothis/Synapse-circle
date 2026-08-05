@@ -1,18 +1,11 @@
 import User from "../models/User.js";
 import { logger } from "../utils/logger.js";
-import {
-  verifyAccessToken,
-  getAccessTokenFromCookie,
-} from "../utils/tokenService.js";
+import { verifyAccessToken } from "../utils/tokenService.js";
 
 /**
- * Reads the access token from the httpOnly cookie (web clients) or the
- * Authorization header
+ * Reads the access token from the Authorization header.
  */
 const extractToken = (req) => {
-  const cookieToken = getAccessTokenFromCookie(req);
-  if (cookieToken) return cookieToken;
-
   const authHeader = req.header("Authorization");
   return authHeader?.replace("Bearer ", "") || null;
 };
@@ -113,8 +106,8 @@ const mapAuthError = (error) => {
 };
 
 /**
- * Authentication middleware - verify JWT access token from cookie
- * (web) or Authorization header (mobile) and attach the user to the request.
+ * Authentication middleware - verify JWT access token from the
+ * Authorization header and attach the user to the request.
  */
 const authenticate = async (req, res, next) => {
   try {

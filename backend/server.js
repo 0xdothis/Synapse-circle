@@ -16,11 +16,10 @@ import profileRoutes from "./src/routes/profile.routes.js";
 import { errorHandler } from "./src/middlewares/errorHandler.js";
 import { globalLimiter } from "./src/middlewares/rateLimiter.js";
 import { logger } from "./src/utils/logger.js";
-import cookieParser from "cookie-parser";
 
 const app = express();
 
-app.use(cookieParser());
+app.set("trust proxy", 1);
 
 const connectDB = async () => {
   try {
@@ -42,6 +41,7 @@ const connectDB = async () => {
 };
 
 // CORS Configuration
+// No cookies are used anymore (pure bearer-token auth), so `credentials` is no longer required
 const allowedOrigins = [
   "https://synapse-circle-tau.vercel.app",
   "https://synap-circle.onrender.com",
@@ -63,7 +63,6 @@ const corsOptions = {
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },
-  credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
   allowedHeaders: [
     "Content-Type",
@@ -71,12 +70,9 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
     "Origin",
-    "x-csrf-token",
-    "X-CSRF-Token",
     "X-Request-ID",
-    "Cookie",
   ],
-  exposedHeaders: ["X-Request-ID", "Set-Cookie"],
+  exposedHeaders: ["X-Request-ID"],
   maxAge: 86400,
   preflightContinue: false,
   optionsSuccessStatus: 204,
@@ -84,7 +80,6 @@ const corsOptions = {
 
 console.log(`📡 Environment: ${process.env.NODE_ENV || "development"}`);
 console.log(`🔒 CORS: Allowed origins: ${allowedOrigins.join(", ")}`);
-console.log(`🔒 CORS: Credentials: ${corsOptions.credentials}`);
 
 app.use(
   helmet({
@@ -104,7 +99,9 @@ app.use((req, res, next) => {
   console.log(
     `📨 ${req.method} ${req.path} | Origin: ${origin || "No origin"}`,
   );
-  console.log(`🍪 Cookies: ${req.headers.cookie ? "Present ✅" : "None ❌"}`);
+  console.log(
+    `🔑 Authorization header: ${req.headers.authorization ? "Present ✅" : "None ❌"}`,
+  );
   next();
 });
 

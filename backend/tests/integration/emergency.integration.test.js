@@ -65,8 +65,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should get all emergency contacts", async () => {
       const res = await request(app)
         .get("/api/emergency/directory")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -82,8 +81,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should filter by type", async () => {
       const res = await request(app)
         .get("/api/emergency/directory?type=hospital")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -93,8 +91,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should search by name", async () => {
       const res = await request(app)
         .get("/api/emergency/directory?search=Health")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -106,8 +103,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should search by address", async () => {
       const res = await request(app)
         .get("/api/emergency/directory?search=Downtown")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -130,8 +126,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should get a specific emergency contact", async () => {
       const res = await request(app)
         .get(`/api/emergency/directory/${contactId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -142,8 +137,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should return 404 for non-existent contact", async () => {
       const res = await request(app)
         .get("/api/emergency/directory/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(res.body).toHaveProperty("success", false);
@@ -155,8 +149,7 @@ describe("Emergency Directory Integration Tests", () => {
     it("should require latitude and longitude", async () => {
       const res = await request(app)
         .get("/api/emergency/nearby")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(400);
 
       expect(res.body).toHaveProperty("success", false);
@@ -171,8 +164,7 @@ describe("Emergency Directory Integration Tests", () => {
         .get(
           "/api/emergency/nearby?latitude=37.7749&longitude=-122.4194&radius=1000",
         )
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -189,8 +181,7 @@ describe("Emergency Directory Integration Tests", () => {
         .get(
           "/api/emergency/nearby?latitude=37.7749&longitude=-122.4194&type=hospital",
         )
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);

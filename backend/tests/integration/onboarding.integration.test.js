@@ -23,8 +23,7 @@ describe("Onboarding Integration Tests", () => {
     it("should start at welcome step", async () => {
       const res = await request(app)
         .get("/api/auth/onboarding-status")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -39,8 +38,7 @@ describe("Onboarding Integration Tests", () => {
     it("should update to location step", async () => {
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           step: "location",
           data: {
@@ -66,8 +64,7 @@ describe("Onboarding Integration Tests", () => {
     it("should update to contacts step", async () => {
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           step: "contacts",
           data: {
@@ -95,8 +92,7 @@ describe("Onboarding Integration Tests", () => {
     it("should update to university step", async () => {
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           step: "university",
           data: {
@@ -116,8 +112,7 @@ describe("Onboarding Integration Tests", () => {
     it("should complete onboarding", async () => {
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ step: "complete" })
         .expect(200);
 
@@ -151,16 +146,14 @@ describe("Onboarding Integration Tests", () => {
       // Move forward first
       await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData2.cookies)
-        .set("x-csrf-token", authData2.csrfToken)
+        .set("Authorization", `Bearer ${authData2.accessToken}`)
         .send({ step: "location" })
         .expect(200);
 
       // Go back
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData2.cookies)
-        .set("x-csrf-token", authData2.csrfToken)
+        .set("Authorization", `Bearer ${authData2.accessToken}`)
         .send({ step: "welcome" })
         .expect(200);
 
@@ -172,15 +165,13 @@ describe("Onboarding Integration Tests", () => {
     it("should prevent jumping forward more than 1 step", async () => {
       await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData2.cookies)
-        .set("x-csrf-token", authData2.csrfToken)
+        .set("Authorization", `Bearer ${authData2.accessToken}`)
         .send({ step: "welcome" })
         .expect(200);
 
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", authData2.cookies)
-        .set("x-csrf-token", authData2.csrfToken)
+        .set("Authorization", `Bearer ${authData2.accessToken}`)
         .send({ step: "contacts" })
         .expect(400);
 
@@ -198,29 +189,25 @@ describe("Onboarding Integration Tests", () => {
 
       await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .send({ step: "location" })
         .expect(200);
 
       await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .send({ step: "contacts" })
         .expect(200);
 
       await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .send({ step: "university" })
         .expect(200);
 
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .send({ step: "complete" })
         .expect(400);
 
@@ -235,8 +222,7 @@ describe("Onboarding Integration Tests", () => {
     it("should show correct step statuses", async () => {
       const res = await request(app)
         .get("/api/auth/onboarding-status")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
@@ -253,8 +239,7 @@ describe("Onboarding Integration Tests", () => {
     it("should show contacts count", async () => {
       const res = await request(app)
         .get("/api/auth/onboarding-status")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(res.body).toHaveProperty("contactsCount");

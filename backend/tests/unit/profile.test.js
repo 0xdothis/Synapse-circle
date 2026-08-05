@@ -37,15 +37,13 @@ describe("Profile API Tests", () => {
 
     await request(app)
       .post("/api/contacts")
-      .set("Cookie", authData.cookies)
-      .set("x-csrf-token", authData.csrfToken)
+      .set("Authorization", `Bearer ${authData.accessToken}`)
       .send(testContact);
 
     for (let i = 0; i < 3; i++) {
       const response = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           latitude: 37.7749 + i * 0.001,
           longitude: -122.4194 + i * 0.001,
@@ -61,8 +59,7 @@ describe("Profile API Tests", () => {
     if (alertId) {
       await request(app)
         .post(`/api/sos/cancel/${alertId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ reason: "false_alarm" });
     }
   });
@@ -75,8 +72,7 @@ describe("Profile API Tests", () => {
     it("should get full user profile with contacts and stats", async () => {
       const response = await request(app)
         .get("/api/profile/me")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -153,8 +149,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .get("/api/profile/me")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -179,8 +174,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/me")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(updateData)
         .expect(200);
 
@@ -211,8 +205,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/me")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(updateData)
         .expect(200);
 
@@ -236,8 +229,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/me")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           email: anotherUser.email,
         })
@@ -277,8 +269,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/me")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .send({ name: "Test" })
         .expect(404);
 
@@ -296,8 +287,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/name")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ name: newName })
         .expect(200);
 
@@ -315,8 +305,7 @@ describe("Profile API Tests", () => {
     it("should return 400 for empty name", async () => {
       const response = await request(app)
         .put("/api/profile/name")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ name: "" })
         .expect(400);
 
@@ -347,8 +336,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/email")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ email: newEmail })
         .expect(200);
 
@@ -366,8 +354,7 @@ describe("Profile API Tests", () => {
     it("should return 400 for invalid email", async () => {
       const response = await request(app)
         .put("/api/profile/email")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ email: "invalid-email" })
         .expect(400);
 
@@ -389,8 +376,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .put("/api/profile/email")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ email: anotherUser.email })
         .expect(409);
 
@@ -420,8 +406,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .post("/api/profile/picture")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .attach("profilePicture", testImagePath)
         .expect(200);
 
@@ -443,8 +428,7 @@ describe("Profile API Tests", () => {
     it("should return 400 for no file upload", async () => {
       const response = await request(app)
         .post("/api/profile/picture")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(400);
 
       expect(response.body).toHaveProperty("success", false);
@@ -457,8 +441,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .post("/api/profile/picture")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .attach("profilePicture", testFilePath)
         .expect(400);
 
@@ -517,15 +500,13 @@ describe("Profile API Tests", () => {
 
       await request(app)
         .post("/api/profile/picture")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .attach("profilePicture", testImagePath)
         .expect(200);
 
       const response = await request(app)
         .delete("/api/profile/picture")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -556,8 +537,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .delete("/api/profile/picture")
-        .set("Cookie", tempAuth.cookies)
-        .set("x-csrf-token", tempAuth.csrfToken)
+        .set("Authorization", `Bearer ${tempAuth.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -584,8 +564,7 @@ describe("Profile API Tests", () => {
     it("should get alert history with all statuses", async () => {
       const response = await request(app)
         .get("/api/profile/history?status=all&limit=10&page=1")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -625,8 +604,7 @@ describe("Profile API Tests", () => {
     it("should filter history by status - cancelled", async () => {
       const response = await request(app)
         .get("/api/profile/history?status=cancelled&limit=10&page=1")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -638,8 +616,7 @@ describe("Profile API Tests", () => {
     it("should filter history by status - sent", async () => {
       const response = await request(app)
         .get("/api/profile/history?status=sent&limit=10&page=1")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -651,8 +628,7 @@ describe("Profile API Tests", () => {
     it("should paginate history correctly", async () => {
       const response = await request(app)
         .get("/api/profile/history?limit=1&page=1")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -678,8 +654,7 @@ describe("Profile API Tests", () => {
     it("should get a specific alert from history", async () => {
       const historyResponse = await request(app)
         .get("/api/profile/history?limit=1&page=1")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       if (historyResponse.body.alerts.length === 0) {
@@ -691,8 +666,7 @@ describe("Profile API Tests", () => {
 
       const response = await request(app)
         .get(`/api/profile/history/${alertIdToGet}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -715,8 +689,7 @@ describe("Profile API Tests", () => {
     it("should return 404 for non-existent alert", async () => {
       const response = await request(app)
         .get("/api/profile/history/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -740,8 +713,7 @@ describe("Profile API Tests", () => {
     it("should return complete profile with all data", async () => {
       const response = await request(app)
         .get("/api/profile/me")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);

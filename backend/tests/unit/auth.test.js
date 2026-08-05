@@ -182,7 +182,8 @@ describe("Authentication API Tests", () => {
         "message",
         "OTP verified successfully",
       );
-      expect(response.body).toHaveProperty("csrfToken");
+      expect(response.body).toHaveProperty("accessToken");
+      expect(response.body).toHaveProperty("refreshToken");
       expect(response.body).toHaveProperty("user");
       expect(response.body.user).toHaveProperty("id");
       expect(response.body.user).toHaveProperty("email", uniqueEmail);
@@ -333,8 +334,7 @@ describe("Authentication API Tests", () => {
       it("should return user profile with valid auth", async () => {
         const response = await request(app)
           .get("/api/auth/me")
-          .set("Cookie", authData.cookies)
-          .set("x-csrf-token", authData.csrfToken)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
           .expect(200);
 
         expect(response.body).toHaveProperty("success", true);
@@ -360,15 +360,10 @@ describe("Authentication API Tests", () => {
       it("should return 401 with invalid token", async () => {
         const response = await request(app)
           .get("/api/auth/me")
-          .set("Cookie", "invalid-cookie")
-          .set("x-csrf-token", "invalid-token")
+          .set("Authorization", "Bearer invalid-token")
           .expect(401);
 
         expect(response.body).toHaveProperty("success", false);
-        expect(response.body).toHaveProperty(
-          "message",
-          "Authentication required. Please log in.",
-        );
       });
     });
 
@@ -376,8 +371,8 @@ describe("Authentication API Tests", () => {
       it("should logout successfully", async () => {
         const response = await request(app)
           .post("/api/auth/logout")
-          .set("Cookie", authData.cookies)
-          .set("x-csrf-token", authData.csrfToken)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
+          .send({ refreshToken: authData.refreshToken })
           .expect(200);
 
         expect(response.body).toHaveProperty("success", true);

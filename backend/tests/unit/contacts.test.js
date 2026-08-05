@@ -30,8 +30,7 @@ describe("Contacts API Tests", () => {
     it("should create a new trusted contact", async () => {
       const response = await request(app)
         .post("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(testContact)
         .expect(201);
 
@@ -56,8 +55,7 @@ describe("Contacts API Tests", () => {
     it("should return error for duplicate contact", async () => {
       const response = await request(app)
         .post("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(testContact)
         .expect(409);
 
@@ -74,8 +72,7 @@ describe("Contacts API Tests", () => {
 
       const response = await request(app)
         .post("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(secondContact)
         .expect(201);
 
@@ -87,8 +84,7 @@ describe("Contacts API Tests", () => {
       // Add third contact
       await request(app)
         .post("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           name: "Bob Wilson",
           email: "bob@example.com",
@@ -99,8 +95,7 @@ describe("Contacts API Tests", () => {
       // Try to add fourth contact (should fail)
       const response = await request(app)
         .post("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           name: "Alice Brown",
           email: "alice@example.com",
@@ -133,8 +128,7 @@ describe("Contacts API Tests", () => {
     it("should get all trusted contacts", async () => {
       const response = await request(app)
         .get("/api/contacts")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -156,8 +150,7 @@ describe("Contacts API Tests", () => {
 
       const response = await request(app)
         .put(`/api/contacts/${contactId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(updatedData)
         .expect(200);
 
@@ -176,8 +169,7 @@ describe("Contacts API Tests", () => {
     it("should return 404 for non-existent contact", async () => {
       const response = await request(app)
         .put("/api/contacts/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ name: "Non-existent" })
         .expect(404);
 
@@ -190,8 +182,7 @@ describe("Contacts API Tests", () => {
     it("should delete a contact", async () => {
       const response = await request(app)
         .delete(`/api/contacts/${contactId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -208,8 +199,7 @@ describe("Contacts API Tests", () => {
     it("should return 404 for already deleted contact", async () => {
       const response = await request(app)
         .delete(`/api/contacts/${contactId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -221,8 +211,7 @@ describe("Contacts API Tests", () => {
     it("should get campus security contacts", async () => {
       const response = await request(app)
         .get("/api/contacts/campus-security")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);

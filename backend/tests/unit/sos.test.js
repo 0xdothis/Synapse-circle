@@ -30,8 +30,7 @@ describe("SOS Alert API Tests", () => {
 
     await request(app)
       .post("/api/contacts")
-      .set("Cookie", authData.cookies)
-      .set("x-csrf-token", authData.csrfToken)
+      .set("Authorization", `Bearer ${authData.accessToken}`)
       .send(testContact);
 
     const securityExists = await CampusSecurity.findOne();
@@ -56,8 +55,7 @@ describe("SOS Alert API Tests", () => {
 
       const response = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send(locationData)
         .expect(200);
 
@@ -84,8 +82,7 @@ describe("SOS Alert API Tests", () => {
     it("should trigger SOS without location", async () => {
       const response = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           latitude: 37.7749,
           longitude: -122.4194,
@@ -126,8 +123,7 @@ describe("SOS Alert API Tests", () => {
         for (let i = 0; i < 3; i++) {
           await request(app)
             .post("/api/sos/trigger")
-            .set("Cookie", authData.cookies)
-            .set("x-csrf-token", authData.csrfToken)
+            .set("Authorization", `Bearer ${authData.accessToken}`)
             .send({
               latitude: 37.7749,
               longitude: -122.4194,
@@ -136,8 +132,7 @@ describe("SOS Alert API Tests", () => {
 
         const response = await request(app)
           .post("/api/sos/trigger")
-          .set("Cookie", authData.cookies)
-          .set("x-csrf-token", authData.csrfToken)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
           .send({
             latitude: 37.7749,
             longitude: -122.4194,
@@ -165,8 +160,7 @@ describe("SOS Alert API Tests", () => {
     it("should cancel an SOS alert", async () => {
       const triggerResponse = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           latitude: 37.7749,
           longitude: -122.4194,
@@ -177,8 +171,7 @@ describe("SOS Alert API Tests", () => {
 
       const response = await request(app)
         .post(`/api/sos/cancel/${newAlertId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           reason: "false_alarm",
         })
@@ -200,8 +193,7 @@ describe("SOS Alert API Tests", () => {
     it("should return 404 for non-existent alert", async () => {
       const response = await request(app)
         .post("/api/sos/cancel/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           reason: "false_alarm",
         })
@@ -217,8 +209,7 @@ describe("SOS Alert API Tests", () => {
       for (let i = 0; i < 3; i++) {
         await request(app)
           .post("/api/sos/trigger")
-          .set("Cookie", authData.cookies)
-          .set("x-csrf-token", authData.csrfToken)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
           .send({
             latitude: 37.7749 + i * 0.001,
             longitude: -122.4194 + i * 0.001,
@@ -227,8 +218,7 @@ describe("SOS Alert API Tests", () => {
 
       const response = await request(app)
         .get("/api/sos/history")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -243,8 +233,7 @@ describe("SOS Alert API Tests", () => {
     it("should filter history by status", async () => {
       const response = await request(app)
         .get("/api/sos/history?status=sent")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -256,8 +245,7 @@ describe("SOS Alert API Tests", () => {
     it("should paginate history", async () => {
       const response = await request(app)
         .get("/api/sos/history?limit=2&offset=0")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -271,8 +259,7 @@ describe("SOS Alert API Tests", () => {
     it("should get a specific alert", async () => {
       const triggerResponse = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           latitude: 37.7749,
           longitude: -122.4194,
@@ -283,8 +270,7 @@ describe("SOS Alert API Tests", () => {
 
       const response = await request(app)
         .get(`/api/sos/history/${newAlertId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -301,8 +287,7 @@ describe("SOS Alert API Tests", () => {
     it("should return 404 for non-existent alert", async () => {
       const response = await request(app)
         .get("/api/sos/history/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);
@@ -314,8 +299,7 @@ describe("SOS Alert API Tests", () => {
     it("should get alert status", async () => {
       const triggerResponse = await request(app)
         .post("/api/sos/trigger")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           latitude: 37.7749,
           longitude: -122.4194,
@@ -326,8 +310,7 @@ describe("SOS Alert API Tests", () => {
 
       const response = await request(app)
         .get(`/api/sos/status/${newAlertId}`)
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
@@ -341,8 +324,7 @@ describe("SOS Alert API Tests", () => {
     it("should return 404 for non-existent alert", async () => {
       const response = await request(app)
         .get("/api/sos/status/507f1f77bcf86cd799439011")
-        .set("Cookie", authData.cookies)
-        .set("x-csrf-token", authData.csrfToken)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
         .expect(404);
 
       expect(response.body).toHaveProperty("success", false);

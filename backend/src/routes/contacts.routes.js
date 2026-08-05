@@ -5,7 +5,6 @@ import { authenticate } from "../middlewares/auth.js";
 import { validate, contactValidation } from "../middlewares/validator.js";
 import { contactLimiter } from "../middlewares/rateLimiter.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
-import { verifyCsrfToken } from "../utils/tokenService.js";
 
 const router = express.Router();
 
@@ -48,7 +47,6 @@ router.get("/", authenticate, contactsController.getContacts);
 router.post(
   "/",
   authenticate,
-  verifyCsrfToken,
   contactLimiter,
   validate(contactValidation.create),
   contactsController.createContact,
@@ -73,7 +71,6 @@ router.post(
 router.put(
   "/:contactId",
   authenticate,
-  verifyCsrfToken,
   validate(contactValidation.update),
   asyncHandler(contactsController.updateContact),
 );
@@ -98,7 +95,6 @@ router.put(
 router.delete(
   "/:contactId",
   authenticate,
-  verifyCsrfToken,
   asyncHandler(contactsController.deleteContact),
 );
 
