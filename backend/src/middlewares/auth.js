@@ -226,8 +226,6 @@ const isOwnResource = (paramName = "id") => {
 };
 
 /**
- * NOT YET WIRED TO ANY ROUTE.
- *
  * Require the token's emailVerified claim to be true. Use this on
  * routes that should be blocked for accounts that signed up but have
  * not yet completed OTP verification. Must run after `authenticate`.
