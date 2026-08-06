@@ -8,15 +8,18 @@ const getIncomingRefreshToken = (req) => req.body?.refreshToken || null;
  * All clients (web and mobile) receive accessToken/refreshToken directly
  * in the JSON body. Clients are responsible for storing them and sending
  * `Authorization: Bearer <accessToken>` on subsequent requests.
+ * `emailVerified` must be passed explicitly by every caller — it gets
+ * baked into the JWT claims so downstream middleware can gate specific
+ * routes on verification status without an extra DB round trip.
  */
 const respondWithSession = async (
   req,
   res,
   { status = 200, message, user, extra = {} },
-  { userId, email, role = "user" },
+  { userId, email, role = "user", emailVerified = false },
 ) => {
   const { accessToken, refreshToken } = await authService.createUserSession(
-    { userId, email, role },
+    { userId, email, role, emailVerified },
     { userAgent: req.headers["user-agent"], ip: req.ip },
   );
 
@@ -32,6 +35,10 @@ const respondWithSession = async (
 
 /**
  * POST /api/auth/signup
+ *
+ * Issues a session immediately, ahead of OTP verification. The token
+ * carries emailVerified: false, since identity has not been proven yet
+ * — routes that require a verified account should gate on that claim.
  */
 const signup = async (req, res, next) => {
   try {
@@ -46,16 +53,23 @@ const signup = async (req, res, next) => {
       });
     }
 
-    const response = {
-      success: true,
-      message: result.message,
-    };
-
-    if (result.developmentOtp) {
-      response.development_otp = result.developmentOtp;
-    }
-
-    res.status(200).json(response);
+    await respondWithSession(
+      req,
+      res,
+      {
+        message: result.message,
+        user: authService.buildUserResponse(result.user),
+        extra: result.developmentOtp
+          ? { development_otp: result.developmentOtp }
+          : {},
+      },
+      {
+        userId: result.user._id,
+        email: result.user.email,
+        role: result.user.role || "user",
+        emailVerified: result.user.isVerified, // false at this point
+      },
+    );
   } catch (error) {
     next(error);
   }
@@ -92,7 +106,12 @@ const login = async (req, res, next) => {
         message: "Login successful",
         user: authService.buildUserResponse(user),
       },
-      { userId: user._id, email: user.email, role: user.role || "user" },
+      {
+        userId: user._id,
+        email: user.email,
+        role: user.role || "user",
+        emailVerified: user.isVerified,
+      },
     );
   } catch (error) {
     next(error);
@@ -119,6 +138,9 @@ const verifyOtp = async (req, res, next) => {
         userId: result.user._id,
         email: result.user.email,
         role: result.user.role || "user",
+        // OTP verification is itself the proof of ownership — treat as
+        // verified even if the DB write hasn't been made elsewhere.
+        emailVerified: true,
       },
     );
   } catch (error) {
@@ -164,7 +186,12 @@ const googleAuth = async (req, res, next) => {
         extra: { isNewUser },
         user: authService.buildUserResponse(user),
       },
-      { userId: user._id, email: user.email, role: user.role || "user" },
+      {
+        userId: user._id,
+        email: user.email,
+        role: user.role || "user",
+        emailVerified: user.isVerified,
+      },
     );
   } catch (error) {
     next(error);
@@ -173,6 +200,9 @@ const googleAuth = async (req, res, next) => {
 
 /**
  * POST /api/auth/refresh-token
+ *
+ * No emailVerified param needed here — sessionService.rotateSession
+ * already re-syncs it from the DB before minting the new token pair.
  */
 const refreshToken = async (req, res, next) => {
   try {

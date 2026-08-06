@@ -133,6 +133,16 @@ const options = {
               example: "123456",
               description: "⚠️ Only in development/test environments",
             },
+            accessToken: {
+              type: "string",
+              description:
+                "Access token for mobile clients (when X-Client-Type: mobile)",
+            },
+            refreshToken: {
+              type: "string",
+              description:
+                "Refresh token for mobile clients (when X-Client-Type: mobile)",
+            },
           },
         },
         VerifyOTPRequest: {

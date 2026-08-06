@@ -30,12 +30,15 @@ const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
 
 /**
  * Create a session (access + refresh token) for a user.
+ * `emailVerified` gets baked into the JWT claims so downstream
+ * middleware can gate specific routes on verification status without
+ * an extra DB round trip.
  */
 const createUserSession = async (
-  { userId, email, role = "user" },
+  { userId, email, role = "user", emailVerified = false },
   meta = {},
 ) => {
-  return createSession(userId, email, role, meta);
+  return createSession(userId, email, role, emailVerified, meta);
 };
 
 const buildUserResponse = (user) => {
@@ -235,7 +238,12 @@ const upsertSignupUser = async (existingUser, { email, name, password }) => {
 
 /**
  * Full signup flow: validate, create/refresh unverified user, send OTP.
- * Returns { error: { status, body } } or { message, developmentOtp }.
+ * Returns { error: { status, message } } or
+ * { message, developmentOtp, user }.
+ *
+ * NOTE: `user.isVerified` will be `false` here — the controller is
+ * responsible for issuing a session with `emailVerified: false` baked
+ * into the token claims, since identity has not yet been proven via OTP.
  */
 const signup = async ({ email, name, password }) => {
   const inputError = validateSignupInput(email, password);
@@ -272,6 +280,7 @@ const signup = async ({ email, name, password }) => {
       config.isDevelopment && result.development_otp
         ? result.development_otp
         : undefined,
+    user,
   };
 };
 
@@ -354,6 +363,11 @@ const resendOtp = async (email) => {
 /**
  * Rotate a refresh token and return the new user + tokens.
  * Returns { error: "REUSED" | "INVALID" } on failure.
+ *
+ * emailVerified on the new token pair is re-synced from the DB inside
+ * sessionService.rotateSession, so it will reflect the user's current
+ * verification status even if it changed since the old refresh token
+ * was issued.
  */
 const refreshTokens = async (refreshToken, meta) => {
   const result = await rotateSession(refreshToken, meta);
@@ -391,10 +405,7 @@ const logout = async (userId, refreshToken) => {
   await User.findByIdAndUpdate(userId, { passwordChangedAt: new Date() });
 };
 
-/* ------------------------------------------------------------------ */
-/* Password reset / change                                             */
-/* ------------------------------------------------------------------ */
-
+//Password reset
 const forgotPassword = async (email) => {
   const user = await User.findOne({ email });
   if (!user) {

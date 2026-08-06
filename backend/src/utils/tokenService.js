@@ -3,9 +3,14 @@ import crypto from "node:crypto";
 import config from "./config.js";
 import { logger } from "./logger.js";
 
-export const generateAccessToken = (userId, email, role = "user") => {
+export const generateAccessToken = (
+  userId,
+  email,
+  role = "user",
+  emailVerified = false,
+) => {
   const token = jwt.sign(
-    { userId, email, role, type: "access" },
+    { userId, email, role, emailVerified, type: "access" },
     process.env.ACCESS_TOKEN_SECRET || config.jwtSecret,
     { expiresIn: config.jwtExpiresIn || "15m" },
   );
@@ -13,6 +18,7 @@ export const generateAccessToken = (userId, email, role = "user") => {
   logger.debug("Access token generated", {
     userId,
     email,
+    emailVerified,
     expiresIn: config.jwtExpiresIn || "15m",
   });
 
@@ -20,13 +26,20 @@ export const generateAccessToken = (userId, email, role = "user") => {
 };
 
 /**
- * Refresh tokens carry a `jti` (JWT ID) so the session can be looked up
+ * Refresh tokens carry a `jti` (JWT ID) so the session can be looked up.
+ * They also carry `emailVerified` so rotateSession has a fallback value,
+ * though sessionService re-syncs this from the DB on every rotation.
  */
-export const generateRefreshToken = (userId, email, role = "user") => {
+export const generateRefreshToken = (
+  userId,
+  email,
+  role = "user",
+  emailVerified = false,
+) => {
   const jti = crypto.randomUUID();
 
   const token = jwt.sign(
-    { userId, email, role, type: "refresh" },
+    { userId, email, role, emailVerified, type: "refresh" },
     process.env.REFRESH_TOKEN_SECRET ||
       config.refreshSecret ||
       config.jwtSecret,
@@ -39,13 +52,14 @@ export const generateRefreshToken = (userId, email, role = "user") => {
     userId,
     email,
     jti,
+    emailVerified,
     expiresIn: config.refreshExpiresIn || "7d",
   });
 
   return { token, jti, expiresAt: new Date(exp * 1000) };
 };
 
-// Generate OTP (already implemented)
+// Generate OTP
 export const generateOtp = () => {
   return crypto.randomInt(100000, 1000000).toString();
 };

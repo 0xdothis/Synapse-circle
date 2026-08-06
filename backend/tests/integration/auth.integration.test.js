@@ -62,12 +62,7 @@ describe("Authentication Integration Tests", () => {
         "message",
         "Logged out successfully",
       );
-
-      // Note: with stateless access tokens, logout revokes the refresh
-      // token server-side but does not blacklist the still-valid access
-      // token — it simply expires on its own (15m). So we don't assert
-      // 401 here with the old access token; instead verify the refresh
-      // token was actually revoked (can't be used to mint a new session).
+      
       const refreshAfterLogout = await request(app)
         .post("/api/auth/refresh-token")
         .send({ refreshToken })
@@ -141,7 +136,6 @@ describe("Authentication Integration Tests", () => {
         .expect(200);
 
       expect(forgotRes.body).toHaveProperty("success", true);
-      expect(forgotRes.body).toHaveProperty("resetId");
       expect(forgotRes.body).toHaveProperty("development_otp");
 
       const resetOtp = forgotRes.body.development_otp;

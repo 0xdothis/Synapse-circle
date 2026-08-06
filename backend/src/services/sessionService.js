@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import RefreshToken from "../models/RefreshToken.js";
+import User from "../models/User.js";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -13,19 +14,24 @@ const hashToken = (token) =>
 /**
  * Issue a brand-new access + refresh token pair for a user and persist
  * the refresh token's hash so it can be looked up, rotated, and revoked.
+ *
+ * `emailVerified` is baked into both tokens' claims. Callers are
+ * responsible for passing the current, accurate value (typically
+ * `user.isVerified` from the DB at the moment of the auth event).
  */
 export const createSession = async (
   userId,
   email,
   role = "user",
+  emailVerified = false,
   meta = {},
 ) => {
-  const accessToken = generateAccessToken(userId, email, role);
+  const accessToken = generateAccessToken(userId, email, role, emailVerified);
   const {
     token: refreshToken,
     jti,
     expiresAt,
-  } = generateRefreshToken(userId, email, role);
+  } = generateRefreshToken(userId, email, role, emailVerified);
 
   await RefreshToken.create({
     jti,
@@ -41,6 +47,12 @@ export const createSession = async (
 
 /**
  * Verify + rotate a refresh token.
+ *
+ * `emailVerified` on the outgoing token pair is re-synced from the DB
+ * rather than trusted from the incoming (possibly stale) refresh token
+ * claim. This matters because a token issued at signup with
+ * emailVerified: false must reflect verification that happened later
+ * via a separate session (e.g. verify-otp), the next time it's rotated.
  */
 export const rotateSession = async (refreshToken, meta = {}) => {
   const decoded = verifyRefreshToken(refreshToken);
@@ -80,24 +92,38 @@ export const rotateSession = async (refreshToken, meta = {}) => {
     return { error: "INVALID" };
   }
 
+  let emailVerified = decoded.emailVerified;
+  try {
+    const user = await User.findById(decoded.userId).select("isVerified");
+    if (user) {
+      emailVerified = user.isVerified;
+    }
+  } catch (error) {
+    logger.error("Failed to re-sync emailVerified during token rotation", {
+      userId: decoded.userId,
+      error: error.message,
+    });
+  }
+
   const { accessToken, refreshToken: newRefreshToken } = await createSession(
     decoded.userId,
     decoded.email,
     decoded.role,
+    emailVerified,
     meta,
   );
 
   return { accessToken, refreshToken: newRefreshToken, userId: decoded.userId };
 };
 
-/** Revoke a single session (logout on one device). */
+// Revoke a single session (logout on one device).
 export const revokeSession = async (refreshToken) => {
   const decoded = verifyRefreshToken(refreshToken);
   if (!decoded?.jti) return;
   await RefreshToken.updateOne({ jti: decoded.jti }, { revokedAt: new Date() });
 };
 
-/** Revoke every active session for a user (password change, "log out everywhere"). */
+// Revoke every active session for a user (password change, "log out everywhere").
 export const revokeAllSessions = async (userId) => {
   await RefreshToken.updateMany(
     { userId, revokedAt: null },

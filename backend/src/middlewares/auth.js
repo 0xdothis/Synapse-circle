@@ -12,7 +12,8 @@ const extractToken = (req) => {
 
 /**
  * Decode a token and load its associated (active) user.
- * Returns { user } on success, or { errorStatus, errorBody } on failure.
+ * Returns { user, decoded } on success, or { errorStatus, errorBody } on
+ * failure.
  */
 const resolveUserFromToken = async (token) => {
   const decoded = verifyAccessToken(token);
@@ -65,7 +66,7 @@ const resolveUserFromToken = async (token) => {
     };
   }
 
-  return { user };
+  return { user, decoded };
 };
 
 /**
@@ -108,6 +109,11 @@ const mapAuthError = (error) => {
 /**
  * Authentication middleware - verify JWT access token from the
  * Authorization header and attach the user to the request.
+ *
+ * Also attaches the decoded token claims to req.tokenClaims (includes
+ * emailVerified as of the moment the token was issued/rotated) so
+ * downstream middleware like requireVerified can gate on it without an
+ * extra DB read.
  */
 const authenticate = async (req, res, next) => {
   try {
@@ -130,6 +136,7 @@ const authenticate = async (req, res, next) => {
 
     req.user = result.user;
     req.userId = result.user._id;
+    req.tokenClaims = result.decoded;
 
     next();
   } catch (error) {
@@ -218,4 +225,35 @@ const isOwnResource = (paramName = "id") => {
   };
 };
 
-export { authenticate, authorize, hasPermission, isOwnResource };
+/**
+ * NOT YET WIRED TO ANY ROUTE.
+ *
+ * Require the token's emailVerified claim to be true. Use this on
+ * routes that should be blocked for accounts that signed up but have
+ * not yet completed OTP verification. Must run after `authenticate`.
+ *
+ * Note: this checks the JWT claim (fast, no DB read), which reflects
+ * verification status as of when the current access token was issued
+ * or last refreshed — not necessarily this exact instant. That's an
+ * acceptable staleness window given access tokens are short-lived
+ * (15m default) and refresh rotation re-syncs from the DB.
+ */
+const requireVerified = (req, res, next) => {
+  if (!req.tokenClaims?.emailVerified) {
+    return res.status(403).json({
+      success: false,
+      message: "Please verify your email to access this resource.",
+      code: "EMAIL_NOT_VERIFIED",
+    });
+  }
+
+  next();
+};
+
+export {
+  authenticate,
+  authorize,
+  hasPermission,
+  isOwnResource,
+  requireVerified,
+};
