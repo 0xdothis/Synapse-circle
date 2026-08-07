@@ -21,6 +21,7 @@ import RegistrationLayout from "./layouts/RegistrationLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Emergency from "./pages/dashboard/Emergency";
 import { protectedLoader } from "./utils/authLoader";
+import HospitalDetails from "./pages/dashboard/HospitalDetails";
 const Welcome = lazy(() => import("./pages/onboarding/Welcome"));
 const Contact = lazy(() => import("./pages/onboarding/Contact"));
 const SchoolInfo = lazy(() => import("./pages/onboarding/SchoolInfo"));
@@ -57,9 +58,9 @@ export const router = createBrowserRouter([
       { path: "auth/reset-password", element: <Suspense fallback={<FullSpinner />}><ForgotPassword /></Suspense>, loader: protectedLoader() },
       { path: "auth/reset-check", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><CheckYourEmail /></Suspense> },
       {
-        path: "auth/verify-email", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
+        path: "auth/verify-email", element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
       },
-      { path: "auth/verified", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
+      { path: "auth/verified", element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
       { path: "auth/reset-email", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><ChangeEmail /></Suspense> }]
   },
   {
@@ -89,7 +90,8 @@ export const router = createBrowserRouter([
       { path: "emergency-cancelled", element: <EmergencyCancelled /> },
       { path: "directory", element: <HospitalDirectory /> },
       { path: "history", element: <AlertHistory /> },
-      { path: "profile", element: <Profile /> }
+      { path: "profile", element: <Profile /> },
+      { path: "directory/:id", element: <HospitalDetails /> }
     ]
   }
 ])

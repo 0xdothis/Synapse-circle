@@ -16,7 +16,7 @@ import { useNavigate } from "react-router"
 import React from "react"
 import Link from "@/components/ui/Link"
 import { useMutation } from "@tanstack/react-query"
-import { verifyOTP } from "@/utils/safewalkFn"
+import { resendOTP, verifyOTP } from "@/utils/safewalkFn"
 import { useAuthStore } from "@/store/useAuthStore"
 
 function SignUpVerification() {
@@ -35,6 +35,8 @@ function SignUpVerification() {
         console.log(data.message || "OTP verfication failed");
         return;
       }
+
+      console.log(data)
 
 
 
@@ -72,20 +74,7 @@ function SignUpVerification() {
   }
 
   const handleResendOTP = async () => {
-
-    const data = await fetch(`https://synap-circle.onrender.com/api/auth/resend-otp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": `$`
-
-      }, body: JSON.stringify({ email })
-    })
-
-    const res = await data.json()
-
-    console.log(res)
-
+    resendOTP(email!)
 
   }
 

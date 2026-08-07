@@ -1,7 +1,7 @@
 import type { ContactDTO } from "@/types";
 import {create} from "zustand"
 import {produce} from "immer"
-//
+
 
 interface LocationProps {
     latitude: number;

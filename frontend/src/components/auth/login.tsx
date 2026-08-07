@@ -39,7 +39,7 @@ function Signin() {
         return;
       }
 
-      const authToken = data.csrfToken
+      const authToken = data.refreshToken
 
       if (authToken) {
         authLogin(authToken)
