@@ -17,13 +17,17 @@ export const protectedLoader = (customLoader?: Function) => {
     const tokens = JSON.parse(rawTokens);
 
 
-    if (!!tokens.state.onboardingToken) {
+    if (!!tokens.state.token) {
+    
+      if (!targetPath.startsWith("/onboarding")) {
+          return redirect("/onboarding");
+      }
       
       return null; 
     }
 
     
-    if (!!tokens.state.authToken) {
+    if (!!tokens.state.token) {
       
       if (targetPath.startsWith("/onboarding")) {
     

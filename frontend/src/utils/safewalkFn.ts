@@ -10,7 +10,6 @@ export const signupUser = async (data: signupDTO): Promise<SignupResponse> => {
 
     const res = await fetch("https://synap-circle.onrender.com/api/auth/signup", {
         method: "POST",
-        credentials: "include",
         headers: {
             "Content-Type": "application/json",
 
@@ -23,7 +22,6 @@ export const signupUser = async (data: signupDTO): Promise<SignupResponse> => {
     const rawJson = await res.json()
 
     const result = signupAuthResponseSchema.parse(rawJson);
-    console.log(result)
 
     if(!result.success) {
         throw new Error(rawJson.message || "Invalid server response");
@@ -43,13 +41,12 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
     const token = JSON.parse(rawToken)
 
+    console.log(token)
+
     const res = await fetch(`https://synap-circle.onrender.com/api/auth/verify-otp`, {
       method: "POST",
-        credentials: "include",
       headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": `${token.state.onboardingToken}`
-
+        "Content-Type": "application/json"
       }, body: JSON.stringify({
         email,
         otpCode: otp
@@ -58,7 +55,11 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
     const rawJson = await res.json();
 
+    console.log(rawJson)
+
     const result = loginAuthResponseSchema.parse(rawJson)
+
+    console.log(result)
 
     if(!result.success) {
         throw new Error(rawJson.message || "Invalid OTP token")
@@ -68,7 +69,25 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
 }
 
-export const resendOTP = async() => {
+export const resendOTP = async(email: string) => {
+
+    console.log("resending")
+    
+    const data = await fetch(`https://synap-circle.onrender.com/api/auth/resend-otp`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+
+      }, body: JSON.stringify({ email })
+    })
+
+    const res = await data.json()
+
+    console.log(res)
+
+
+
+
 
 }
 
@@ -133,10 +152,9 @@ export const onboardingRegistration = async(onboardingInfo: {
     
     const res = await fetch("https://synap-circle.onrender.com/api/auth/onboarding-step", {
         method: "PATCH",
-        credentials: "include",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token.state.onboardingToken}`
+            "Authorization": `Bearer ${token.state.token}`
         },
         body: JSON.stringify(reqData)
     })
@@ -154,7 +172,6 @@ export const loginWithGoogle = async (credential: string) => {
     
     const res = await fetch("https://synap-circle.onrender.com/api/auth/google", {
         method: "POST",
-        credentials: "include",
         headers: {
             "Content-Type": "application/json"
         },
@@ -186,7 +203,7 @@ export const triggerSOS = async (sosData: {latitude: number, longitude: number, 
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-             "x-csrf-token": `${token.state.authToken}`
+             "Authorization": `${token.state.token}`
 
         },
         body: JSON.stringify(sosData)

@@ -25,13 +25,15 @@ export interface InputProps
   extends Omit<React.ComponentProps<"input">, "size">,
   VariantProps<typeof inputVariants> {
   startIcon?: IconSvgElement
-  endIcon?: IconSvgElement
+  endIcon?: IconSvgElement,
+  iconSize?: number
 }
 
 function Input({
   className,
   type,
   size,
+  iconSize = 24,
   startIcon,
   endIcon,
   ...props
@@ -45,6 +47,7 @@ function Input({
         inputVariants({ size }),
         startIcon,
         endIcon,
+        iconSize,
         className
       )}
       {...props}
@@ -56,14 +59,14 @@ function Input({
   return (
     <div data-slot="input-wrapper" className="relative flex w-full items-center">
       {startIcon && (
-        <span className="pointer-events-none absolute left-3 flex items-center text-muted-foreground">
-          <HugeiconsIcon icon={startIcon} size={24} />
+        <span className="pointer-events-none absolute left-3 flex items-center text-neutral-600">
+          <HugeiconsIcon icon={startIcon} size={iconSize} />
         </span>
       )}
       {input}
       {endIcon && (
-        <span className="pointer-events-none absolute right-3 flex items-center text-muted-foreground">
-          <HugeiconsIcon icon={endIcon} size={24} />
+        <span className="pointer-events-none absolute right-3 flex items-center text-neutral-600">
+          <HugeiconsIcon icon={endIcon} size={iconSize} />
         </span>
       )}
     </div>

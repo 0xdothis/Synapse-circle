@@ -13,7 +13,8 @@ export const navLinks = [
     label: "Home",
     to: "/dashboard",
     sectionId: "home",
-    icon: Home01Icon
+    icon: Home01Icon,
+    end: true
   },
   {
     label: "Directory",
