@@ -4,20 +4,33 @@ import Button from "@/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowRight01Icon } from "@hugeicons/core-free-icons"
 import { useNavigate } from "react-router"
-import { useMutation } from "@tanstack/react-query"
-import { triggerSOS } from "@/utils/safewalkFn"
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query"
+import { triggerSOS, userProfile } from "@/utils/safewalkFn"
 import { useOnboardingStore } from "@/store/useOnboardingStore"
+import useLocation from "@/utils/hooks/useLocation"
+import { trackEvent } from "@/lib/mixpanelClient"
 
 function Home() {
   const navigate = useNavigate()
-  const location = useOnboardingStore(state => state.onboardingData.location)
+  const updateLocation = useOnboardingStore(state => state.updateLocation);
+  const { location, getLocation } = useLocation();
+
+  const { data: { profile } } = useSuspenseQuery({
+    queryKey: ["getUser"],
+    queryFn: userProfile
+  })
+
 
   const { mutate } = useMutation({
     mutationFn: triggerSOS,
     onSuccess: (data) => {
 
       console.log(data)
-      navigate("countdown")
+
+      trackEvent("alert_delivery_confirmed")
+      navigate("countdown", { state: { id: data.alertId } })
+      trackEvent("alert_dispatched")
+
     },
     onError: (err) => {
       console.log(err)
@@ -25,15 +38,42 @@ function Home() {
   })
 
 
-  function handleSOSTrigger() {
+  async function handleSOSTrigger() {
 
-    mutate({ ...location, locationAvailable: true })
+    trackEvent("sos_button_clicked")
+
+    trackEvent("location_capture_attempted")
+
+    const coords = location ?? (await getLocation())
+
+
+    if (!coords) {
+
+      trackEvent("location_capture_failed")
+
+      return
+    }
+
+    trackEvent("location_captured")
+
+    updateLocation({ longitude: coords.lng, latitude: coords.lat })
+
+    mutate({ latitude: coords.lat, longitude: coords.lng, locationAvailable: true })
   }
+
+  if (!profile) {
+
+    return;
+  }
+
+  console.log(profile)
+
+
 
 
   return (
     <section className="relative pt-4 pb-16">
-      <Header title="University of Ilorin" caption="Good Evening, " name="Tomi"
+      <Header title={profile.university} caption="Good Evening, " name={profile.name.split(" ")[0]}
       />
       <div className="mt-22 scroll-mt-20 mb-5">
         <div>

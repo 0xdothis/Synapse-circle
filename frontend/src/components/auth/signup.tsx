@@ -46,10 +46,13 @@ function Signup() {
         return;
       }
 
-      const onboardingToken = data.csrfToken;
+      console.log(data)
 
-      if (onboardingToken) {
-        signup(onboardingToken, userInfo.email)
+      const token = data.accessToken;
+      const isVerified = data.user?.isVerified!;
+
+      if (token && !isVerified) {
+        signup(token, userInfo.email, isVerified)
       }
 
       setUserInfo({ name: "", password: "", email: "", confirmPassword: "", phoneNumber: "", terms: false })

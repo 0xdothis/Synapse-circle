@@ -1,25 +1,26 @@
 import type { ContactDTO } from "@/types";
 import {create} from "zustand"
-import {produce} from "immer"
-//
+import { persist, createJSONStorage } from "zustand/middleware";
 
 interface LocationProps {
     latitude: number;
     longitude: number
 }
 
-export interface OnboardingState {
+interface OnboardingState {
     onboardingData: {
         location: LocationProps
-        universityId: string;
-        selectedUniversity: string;
+        name: string;
+        acronym: string;
         contacts: ContactDTO[]
     },
     updateLocation: (location: LocationProps) => void
     updateFields: (fields: Partial<OnboardingState['onboardingData']>) => void,
     handleContactChange: (index: number, updatedContact: ContactDTO) => void,
+    handleUniversityChange: (school: {name: string, acronym: string}) => void,
     addContactSlot: () => void,
-    removeContactSlot: (indexToRemove: number) => void
+    removeContactSlot: (indexToRemove: number) => void,
+    clearOnboardingData: () => void;
 
 }
 const initialState = {
@@ -27,38 +28,50 @@ const initialState = {
     latitude: 0,
     longitude: 0
     },
-    universityId: "",
-    selectedUniversity: "",
-    contacts: [{name: "", email: "", phoneNumber: "", relationship: null}]
+    name: "",
+    acronym: "",
+    contacts: [{name: "", email: "", phoneNumber: "", relationship: ""}]
     }
 
 
-export const useOnboardingStore = create<OnboardingState>((set) => ({
+export const useOnboardingStore = create<OnboardingState>()(
+persist(
+        (set) => ({
     onboardingData: initialState,
-    updateFields: (fields) => set(produce((state) => {
-        state.onboardingData = {...fields}
+    updateFields: (fields) => set((state) => ({
+        onboardingData: {...state.onboardingData, ...fields}
     })),
-
-    handleContactChange: (index, updatedContact) => set(produce((state) => {
-
+    
+    handleContactChange: (index, updatedContact) => set((state) => {
         const newContacts = [...state.onboardingData.contacts];
         newContacts[index] = updatedContact;
         return {
             onboardingData: {...state.onboardingData, contacts: newContacts}
         }
-    })),
+    }),
+    handleUniversityChange:(school) => set((state) => ({
+                onboardingData: { ...state.onboardingData,
+                    acronym: school.acronym,
+                    name: school.name
+                }    
 
-    updateLocation:(location) => set(produce((state) => {
-        state.onboardingData.location = location
-    })),
+            })),
+    updateLocation:(location) => set((state) => ({
 
-    addContactSlot: () => set(produce((state) => ({
+        onboardingData: {
+            ...state.onboardingData,
+            location
+        }
+        
+    }))
+    ,
+
+    addContactSlot: () => set((state) => ({
         onboardingData: {
             ...state.onboardingData,
             contacts: [...state.onboardingData.contacts, {name: "", email: "", phoneNumber: "", relationship: ""}]
         }
-    }))),
-
+    })),
     removeContactSlot: (indexToRemove) => set((state) => {
         const currentContacts = state.onboardingData.contacts;
         if(currentContacts.length > 1) {
@@ -70,5 +83,14 @@ export const useOnboardingStore = create<OnboardingState>((set) => ({
             }
         }
         return {}
-    })
-}))
+    }),
+     clearOnboardingData: () =>
+        set(() => ({
+          onboardingData: initialState,
+        })), // ← this comma just separates it from the next action, nothing else follows it inside this object
+    }),
+    {
+      name: "onboarding-storage",
+      storage: createJSONStorage(() => localStorage),
+    }
+   ))

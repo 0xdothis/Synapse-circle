@@ -203,7 +203,9 @@ export const createAuthResponseSchema = <T extends z.ZodType>(dataSchema: T) => 
         message: z.string(),
         development_otp: z.string().optional(),
         user: userResponseSchema.optional(),
-        csrfToken: z.string().optional(),
+        accessToken: z.string().optional(),
+        refreshToken: z.string().optional(),
+        isVerified: z.boolean().optional(),
         data: dataSchema.optional(),
         errors: z.array(z.string()).optional()
     })
@@ -227,9 +229,9 @@ export interface loginCredentials {
 
 export interface AuthState {
     email: string | null,
-    authToken: string | null;
-    onboardingToken: string | null,
-    signup: (token: string, email: string) => void;
+    token: string | null;
+    isVerified: boolean | null;
+    signup: (token: string, email: string, isVerified: boolean) => void;
     login: (token: string) => void;
     logout: () => void;
 }

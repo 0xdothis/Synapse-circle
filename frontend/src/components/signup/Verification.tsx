@@ -16,40 +16,18 @@ import { useNavigate } from "react-router"
 import React from "react"
 import Link from "@/components/ui/Link"
 import { useMutation } from "@tanstack/react-query"
-import { verifyOTP } from "@/utils/safewalkFn"
+import { resendOTP, verifyOTP } from "@/utils/safewalkFn"
 import { useAuthStore } from "@/store/useAuthStore"
 
 function SignUpVerification() {
 
   const email = useAuthStore(state => state.email)
+  const signup = useAuthStore(state => state.signup)
+
   const navigate = useNavigate()
   const [otp, setOTP] = React.useState("")
 
   const isValid = otp.trim().length !== 6;
-
-  const { isPending, mutate, error } = useMutation({
-    mutationFn: verifyOTP,
-    onSuccess: (data) => {
-
-      if (!data.success) {
-        console.log(data.message || "OTP verfication failed");
-        return;
-      }
-
-
-
-
-      setOTP("");
-      navigate("/auth/verified", { replace: true })
-
-
-
-    },
-    onError: (err) => {
-      throw err
-    }
-
-  })
 
   let maskedEmail: string = "";
 
@@ -59,6 +37,35 @@ function SignUpVerification() {
     maskedEmail = `${maskedName}@${domain}`
 
   }
+
+  const { isPending, mutate, error } = useMutation({
+    mutationFn: verifyOTP,
+    onSuccess: (data) => {
+
+      if (!data.success) {
+        console.log("ERROR", data)
+        console.log(data.message || "OTP verfication failed");
+        return;
+      }
+
+      console.log(data)
+
+      const token = data.accessToken;
+      const isVerified = data.user?.isVerified!
+
+      if (token && isVerified) {
+        signup(token, email!, isVerified)
+      }
+
+      setOTP("");
+      navigate("/auth/verified", { replace: true })
+
+    },
+    onError: (err) => {
+      console.log(err)
+    }
+  })
+
 
   const handleOTP: React.MouseEventHandler<HTMLButtonElement> = async () => {
 
@@ -72,20 +79,7 @@ function SignUpVerification() {
   }
 
   const handleResendOTP = async () => {
-
-    const data = await fetch(`https://synap-circle.onrender.com/api/auth/resend-otp`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-csrf-token": `$`
-
-      }, body: JSON.stringify({ email })
-    })
-
-    const res = await data.json()
-
-    console.log(res)
-
+    resendOTP(email!)
 
   }
 

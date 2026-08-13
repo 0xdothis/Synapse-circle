@@ -1,44 +1,62 @@
 import { getToken } from "@/lib/authStorage";
-import { redirect} from "react-router";
+import { redirect, type LoaderFunction, type LoaderFunctionArgs} from "react-router";
 
 
-export const protectedLoader = (customLoader?: Function) => {
-  return async (args: any) => {
-    
-    const currentRequestedUrl = new URL(args.request.url);
-    const targetPath = currentRequestedUrl.pathname; 
+export const protectedLoader = (customLoader?: LoaderFunction) => {
+  return async (args: LoaderFunctionArgs) => {
 
-    const rawTokens = getToken();
+    const localToken = getToken();
 
-    if (!rawTokens) {
-      return redirect("/auth/login");
+    if (!localToken?.token) {
+      return redirect("/auth/login")
+  }
+
+    if(localToken?.isVerified) {
+      return null
     }
 
-    const tokens = JSON.parse(rawTokens);
 
 
-    if (!!tokens.state.onboardingToken) {
-      
-      return null; 
+    if (customLoader) {
+      return customLoader(args)
     }
 
-    
-    if (!!tokens.state.authToken) {
-      
-      if (targetPath.startsWith("/onboarding")) {
-    
-        return redirect("/dashboard");
-      }
+    return redirect("/auth/verify-email")
+  }
+}
 
-    
-      if (customLoader) {
-        return customLoader(args);
-      }
-      return null;
+
+export const publicOnlyLoader = (customLoader?: LoaderFunction) => {
+  return async (args: LoaderFunctionArgs) => {
+    const localToken = getToken()
+
+    if(!localToken?.isVerified) {
+        return null
     }
 
-    
-    return redirect("/auth/login");
-  };
-};
+    if (localToken?.token ) {
+      return redirect("/dashboard")
+    }
+
+    if (customLoader) {
+      return customLoader(args)
+    }
+
+    return null
+  }
+}
+
+
+export const verifiedOnlyLoader = () => {
+  return async () => {
+
+    const localToken = getToken();
+
+    if (localToken?.isVerified && localToken?.isVerified) {
+      return redirect("/dashboard")
+    }
+
+      return null
+  }
+}
 
