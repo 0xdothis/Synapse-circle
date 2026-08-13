@@ -24,6 +24,8 @@ function SignupPage() {
 
 
   function handleGoogleLogin(credential: CredentialResponse) {
+
+    console.log(credential.credential)
     if (credential.credential) {
       mutate(credential.credential)
     }
@@ -74,7 +76,7 @@ function SignupPage() {
             onSuccess={handleGoogleLogin}
             onError={() => {
               console.log("[GOOGLE]", "Login Failed")
-            }} shape="pill" />
+            }} width="100%" shape="pill" />
           <small className="text-center text-xs text-neutral-400">OR</small>
           <Link to="/auth/login" variant="secondary" size="sm" className="w-full">Continue with Email</Link>
         </div>

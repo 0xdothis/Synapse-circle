@@ -20,7 +20,7 @@ import ErrorPage from "./pages/error";
 import RegistrationLayout from "./layouts/RegistrationLayout";
 import DashboardLayout from "./layouts/DashboardLayout";
 import Emergency from "./pages/dashboard/Emergency";
-import { protectedLoader } from "./utils/authLoader";
+import { protectedLoader, publicOnlyLoader, verifiedOnlyLoader } from "./utils/authLoader";
 import HospitalDetails from "./pages/dashboard/HospitalDetails";
 const Welcome = lazy(() => import("./pages/onboarding/Welcome"));
 const Contact = lazy(() => import("./pages/onboarding/Contact"));
@@ -34,7 +34,8 @@ const FalseAlarm = lazy(() => import("./pages/dashboard/FalseAlarm"))
 const EmergencyEnded = lazy(() => import("./pages/dashboard/EmergencyEnded"))
 const EmergencyCancelled = lazy(() => import("./pages/dashboard/EmergencyCancelled"))
 const HospitalDirectory = lazy(() => import("./pages/dashboard/Directory"))
-const AlertHistory = lazy(() => import("./pages/dashboard/AlertHistory"))
+const Alert = lazy(() => import("./pages/dashboard/Alert"))
+const AlertDetail = lazy(() => import("./pages/dashboard/AlertDetail"))
 const Profile = lazy(() => import("./pages/dashboard/Profile"))
 
 
@@ -52,27 +53,28 @@ export const router = createBrowserRouter([
 
     element: <RegistrationLayout />,
     children: [
-      { path: "signup", element: <Suspense fallback={<FullSpinner />} ><SignupPage /></Suspense> },
-      { path: "auth/login", element: <Suspense fallback={<FullSpinner />}><Signin /></Suspense> },
-      { path: "auth/signup", element: <Suspense fallback={<FullSpinner />}><Signup /></Suspense> },
-      { path: "auth/reset-password", element: <Suspense fallback={<FullSpinner />}><ForgotPassword /></Suspense>, loader: protectedLoader() },
+      { path: "signup", loader: publicOnlyLoader(), element: <Suspense fallback={<FullSpinner />} ><SignupPage /></Suspense> },
+      { path: "auth/login", loader: publicOnlyLoader(), element: <Suspense fallback={<FullSpinner />}><Signin /></Suspense> },
+      { path: "auth/signup", loader: publicOnlyLoader(), element: <Suspense fallback={<FullSpinner />}><Signup /></Suspense> },
+      { path: "auth/reset-password", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><ForgotPassword /></Suspense> },
       { path: "auth/reset-check", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><CheckYourEmail /></Suspense> },
       {
-        path: "auth/verify-email", element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
+        path: "auth/verify-email", loader: verifiedOnlyLoader(), element: <Suspense fallback={<FullSpinner />} ><SignUpVerification /></Suspense>
       },
-      { path: "auth/verified", element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
+      { path: "auth/verified", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><SignUpVerified /></Suspense> },
       { path: "auth/reset-email", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><ChangeEmail /></Suspense> }]
   },
   {
     path: "/onboarding",
+    loader: protectedLoader(),
     element: <OnboardingLayout />,
     children: [
-      { index: true, element: <Suspense fallback={<FullSpinner />}><Welcome /></Suspense> },
-      { path: "location", element: <Suspense fallback={<FullSpinner />}><Location /></Suspense> },
-      { path: "trusted-contact", element: <Suspense fallback={<FullSpinner />}><Contact /></Suspense> },
-      { path: "contact-form", element: <Suspense fallback={<FullSpinner />}><ContactForm /></Suspense> },
-      { path: "school-info", element: <Suspense fallback={<FullSpinner />}><SchoolInfo /></Suspense> },
-      { path: "school-form", element: <Suspense fallback={<FullSpinner />}><SchoolForm /></Suspense> }
+      { index: true, loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Welcome /></Suspense> },
+      { path: "location", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Location /></Suspense> },
+      { path: "trusted-contact", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Contact /></Suspense> },
+      { path: "contact-form", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><ContactForm /></Suspense> },
+      { path: "school-info", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><SchoolInfo /></Suspense> },
+      { path: "school-form", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><SchoolForm /></Suspense> }
 
 
     ]
@@ -80,18 +82,22 @@ export const router = createBrowserRouter([
   },
   {
     path: "/dashboard",
+    loader: protectedLoader(),
     element: <DashboardLayout />,
     children: [
-      { index: true, element: <DashboardHome /> },
-      { path: "countdown", element: <EmergencyCountDown /> },
-      { path: "emergency", element: <Emergency /> },
-      { path: "false-alarm", element: <FalseAlarm /> },
-      { path: "emergency-ended", element: <EmergencyEnded /> },
-      { path: "emergency-cancelled", element: <EmergencyCancelled /> },
-      { path: "directory", element: <HospitalDirectory /> },
-      { path: "history", element: <AlertHistory /> },
-      { path: "profile", element: <Profile /> },
-      { path: "directory/:id", element: <HospitalDetails /> }
+      { index: true, element: <Suspense fallback={<FullSpinner />}><DashboardHome /></Suspense> },
+      { path: "countdown", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><EmergencyCountDown /></Suspense> },
+      { path: "emergency", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Emergency /></Suspense> },
+      {
+        path: "false-alarm", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><FalseAlarm /></Suspense>
+      },
+      { path: "emergency-ended", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><EmergencyEnded /></Suspense> },
+      { path: "emergency-cancelled", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><EmergencyCancelled /></Suspense> },
+      { path: "directory", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><HospitalDirectory /></Suspense> },
+      { path: "history", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Alert /></Suspense> },
+      { path: "history/:id", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><AlertDetail /></Suspense> },
+      { path: "profile", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><Profile /></Suspense> },
+      { path: "directory/:id", loader: protectedLoader(), element: <Suspense fallback={<FullSpinner />}><HospitalDetails /></Suspense> }
     ]
   }
 ])

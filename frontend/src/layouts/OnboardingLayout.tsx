@@ -4,6 +4,7 @@ import Button from "@/components/ui/button"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ArrowLeft02Icon } from "@hugeicons/core-free-icons"
 import { cn } from "@/utils/index"
+import { trackEvent } from "@/lib/mixpanelClient"
 
 function OnboardingLayout() {
   const navigate = useNavigate()
@@ -26,6 +27,11 @@ function OnboardingLayout() {
   const currentStepNum = activeIndex + 1
   const totalSteps = ["location", "trusted-contact", "school-info"]
 
+  function handleSkip() {
+    trackEvent("onboarding_abandoned")
+    navigate("/dashboard", { replace: true })
+  }
+
   return (
     <div className="h-screen lg:h-full lg:min-h-0 flex flex-col lg:flex-row lg:overflow-hidden">
 
@@ -39,7 +45,7 @@ function OnboardingLayout() {
             <Button onClick={() => navigate(-1)} variant="ghost" size="sm">
               <HugeiconsIcon icon={ArrowLeft02Icon} /> Back
             </Button>
-            <Button variant="ghost" size="sm">Skip</Button>
+            <Button variant="ghost" size="sm" onClick={handleSkip}>Skip</Button>
           </div>
 
           <div className="flex flex-col flex-1 justify-between">

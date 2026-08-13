@@ -49,9 +49,10 @@ function Signup() {
       console.log(data)
 
       const token = data.accessToken;
+      const isVerified = data.user?.isVerified!;
 
-      if (token) {
-        signup(token, userInfo.email)
+      if (token && !isVerified) {
+        signup(token, userInfo.email, isVerified)
       }
 
       setUserInfo({ name: "", password: "", email: "", confirmPassword: "", phoneNumber: "", terms: false })

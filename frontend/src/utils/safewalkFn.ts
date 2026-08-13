@@ -1,14 +1,15 @@
 
 import type { LoginCredentials } from "@/components/auth/login";
-import { getToken } from "@/lib/authStorage";
+import { clearAuth, getToken } from "@/lib/authStorage";
 import {loginAuthResponseSchema, signupAuthResponseSchema, type ContactDTO, type LoginResponse, type signupDTO, type SignupResponse } from "@/types";
 
+const URL = import.meta.env.VITE_BACKEND_URL || "https://synap-circle.onrender.com/api"
 
 
 export const signupUser = async (data: signupDTO): Promise<SignupResponse> => {
      const {name, email, password, phoneNumber} = data;
 
-    const res = await fetch("https://synap-circle.onrender.com/api/auth/signup", {
+    const res = await fetch(`${URL}/auth/signup`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
@@ -33,20 +34,23 @@ export const signupUser = async (data: signupDTO): Promise<SignupResponse> => {
 
 export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Promise<LoginResponse> => {
 
-    const rawToken = getToken();
+    const localToken = getToken()
 
-    if(!rawToken) {
+    const token = localToken?.token
+
+    if(!token) {
         throw new Error("Something went wrong");
     }
 
-    const token = JSON.parse(rawToken)
+    console.log("USER EMAIL", email);
+    console.log("[REFRESH TOKEN]", token)
 
-    console.log(token)
-
-    const res = await fetch(`https://synap-circle.onrender.com/api/auth/verify-otp`, {
+    const res = await fetch(`${URL}/auth/verify-otp`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+
       }, body: JSON.stringify({
         email,
         otpCode: otp
@@ -55,11 +59,9 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
     const rawJson = await res.json();
 
-    console.log(rawJson)
 
     const result = loginAuthResponseSchema.parse(rawJson)
 
-    console.log(result)
 
     if(!result.success) {
         throw new Error(rawJson.message || "Invalid OTP token")
@@ -71,12 +73,20 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
 
 export const resendOTP = async(email: string) => {
 
-    console.log("resending")
+    const localToken = getToken()
+
+    const token = localToken?.token
+
+     if(!token) {
+        throw new Error("Something went wrong");
+    }
+
     
-    const data = await fetch(`https://synap-circle.onrender.com/api/auth/resend-otp`, {
+    const data = await fetch(`${URL}/auth/resend-otp`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `${token}`
 
       }, body: JSON.stringify({ email })
     })
@@ -84,9 +94,6 @@ export const resendOTP = async(email: string) => {
     const res = await data.json()
 
     console.log(res)
-
-
-
 
 
 }
@@ -99,7 +106,7 @@ export const login = async (user: LoginCredentials): Promise<LoginResponse> => {
         throw new Error("email or password cannot be empty")
     }
 
-    const res = await fetch("https://synap-circle.onrender.com/api/auth/login", {
+    const res = await fetch(`${URL}/auth/login`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -126,19 +133,23 @@ export const onboardingRegistration = async(onboardingInfo: {
     step?: string;
         data: {
         location?: {latitude: number; longitude: number}
-        universityId?: string
-        selectedUniversity?: string
-        contact?: ContactDTO[]
+        name?: string
+        acronym?: string
+        contacts?: ContactDTO[]
     }}
  ) => {
 
-     const rawToken = getToken();
+    const localToken = getToken()
 
-    if(!rawToken) {
+    const token = localToken?.token
+    console.log("[TOKEN]", token)
+
+     if(!token) {
         throw new Error("Something went wrong");
     }
 
-    const token = JSON.parse(rawToken)
+
+
 
     console.log("[OnboardingInfo]", onboardingInfo)
 
@@ -150,11 +161,11 @@ export const onboardingRegistration = async(onboardingInfo: {
 
     console.log(reqData)
     
-    const res = await fetch("https://synap-circle.onrender.com/api/auth/onboarding-step", {
+    const res = await fetch(`${URL}/auth/onboarding-step`, {
         method: "PATCH",
         headers: {
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${token.state.token}`
+            "Authorization": `Bearer ${token}`
         },
         body: JSON.stringify(reqData)
     })
@@ -170,7 +181,7 @@ export const onboardingRegistration = async(onboardingInfo: {
 
 export const loginWithGoogle = async (credential: string) => {
     
-    const res = await fetch("https://synap-circle.onrender.com/api/auth/google", {
+    const res = await fetch(`${URL}/auth/google`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -188,22 +199,22 @@ export const loginWithGoogle = async (credential: string) => {
 
 export const triggerSOS = async (sosData: {latitude: number, longitude: number, locationAvailable: boolean}) => {
 
-    
-     const rawToken = getToken();
+     const localToken = getToken()
 
-    if(!rawToken) {
+    const token = localToken?.token
+
+     if(!token) {
         throw new Error("Something went wrong");
     }
 
-    const token = JSON.parse(rawToken)
 
 
 
-  const res = await fetch("https://synap-circle.onrender.com/api/sos/trigger", {
+  const res = await fetch(`${URL}/sos/trigger`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-             "Authorization": `${token.state.token}`
+             "Authorization": `${token}`
 
         },
         body: JSON.stringify(sosData)
@@ -218,4 +229,130 @@ export const triggerSOS = async (sosData: {latitude: number, longitude: number, 
 
 }
 
-export const logout = async() => {}
+export const alertHistory = async () => {
+
+      const localToken = getToken()
+
+    const token = localToken?.token
+
+     if(!token) {
+        throw new Error("Something went wrong");
+    }
+
+
+  const res = await fetch(`${URL}/sos/history`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+             "Authorization": `${token}`
+
+        }
+    })
+
+
+    const rawJson = await res.json();
+
+    return rawJson
+
+
+
+}
+
+
+
+export const alertDetail = async ( id: string) => {
+
+      const localToken = getToken()
+
+    const token = localToken?.token
+
+     if(!token) {
+        throw new Error("Something went wrong");
+    }
+
+
+  const res = await fetch(`${URL}/sos/history/${id}`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+             "Authorization": `${token}`
+
+        }
+    })
+
+
+    const rawJson = await res.json();
+
+    return rawJson
+
+
+
+}
+
+
+export const cancelAlert = async ( {id, reason}: {id: string, reason: string}) => {
+
+      const localToken = getToken()
+
+    const token = localToken?.token
+
+     if(!token) {
+        throw new Error("Something went wrong");
+    }
+
+
+  const res = await fetch(`${URL}/sos/cancel/${id}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+             "Authorization": `${token}`
+        },
+        body: JSON.stringify({reason})
+    })
+
+
+    const rawJson = await res.json();
+
+    return rawJson
+
+
+
+}
+
+
+export const userProfile = async () => {
+
+      const localToken = getToken()
+
+    const token = localToken?.token
+
+     if(!token) {
+        throw new Error("Something went wrong");
+    }
+
+
+  const res = await fetch(`${URL}/profile/me`, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json",
+             "Authorization": `${token}`
+
+        }
+    })
+
+
+    const rawJson = await res.json();
+
+    return rawJson
+
+
+
+}
+
+
+
+
+export const logout = async() => {
+    clearAuth();
+    
+}

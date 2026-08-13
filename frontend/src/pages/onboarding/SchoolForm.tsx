@@ -8,47 +8,90 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox"
-
+import Loader from "@/components/Loader"
 import { Field, FieldSet, FieldGroup, FieldLabel } from "@/components/ui/field"
 import React from "react"
+import { nigerianTertiarySchools } from "@/schools"
+import { useOnboardingStore } from "@/store/useOnboardingStore"
+import { useMutation } from "@tanstack/react-query"
+import { onboardingRegistration } from "@/utils/safewalkFn"
+import { trackEvent } from "@/lib/mixpanelClient"
 
-const schools = [
-  "University of Ibadan",
-  "University of Lagos",
-  "Ahmadu Bello University",
-  "University of Nigeria, Nsukka",
-  "Obafemi Awolowo University",
-  "Covenant University",
-  "Federal University of Technology, Minna",
-  "University of Ilorin",
-  "University of Benin",
-  "University of Port Harcourt",
-  "Lagos State University",
-  "Nnamdi Azikiwe University",
-  "Bayero University Kano",
-  "Federal University of Technology, Akure",
-  "University of Abuja",
-  "Afe Babalola University",
-  "Babcock University",
-  "Federal University of Agriculture, Abeokuta",
-  "Ladoke Akintola University of Technology",
-  "University of Jos"
-] as const
+const schools = nigerianTertiarySchools
+
+interface Institution {
+  name: string;
+  acronym: string;
+}
+
 
 function SchoolForm() {
   const navigate = useNavigate()
-  const [institution, setInstitution] = React.useState<string | null>(null)
+  const [institution, setInstitution] = React.useState<Institution | null>(null)
+  const updateSchool = useOnboardingStore(state => state.handleUniversityChange)
+  //const newSchool = useOnboardingStore(state => state.onboardingData.selectedUniversity)
   const [touched, setTouched] = React.useState(false)
 
+  function handleChangeInstitution(value: string | null) {
 
-  function handleChangeInstitution() {
-    return (value: string | null) => {
-      setInstitution(value)
-      setTouched(true)
+    setTouched(true)
+
+    if (!value) {
+      setInstitution(null);
+      return
+    }
+
+    const selectedSchool = schools.find(school => school.name === value);
+
+    if (selectedSchool) {
+      setInstitution(selectedSchool)
+      updateSchool(selectedSchool)
     }
   }
 
 
+  const { isPending, mutate } = useMutation({
+    mutationFn: onboardingRegistration,
+    onSuccess: (data) => {
+
+      if (!data.success) {
+        return
+
+      }
+
+      trackEvent("university_added")
+
+      console.log(data)
+      navigate("/dashboard", { replace: true })
+
+    },
+    onError: (err) => {
+      console.log(err)
+    }
+  })
+
+
+
+  function handleSubmitSchool() {
+
+
+    if (institution?.name.trim() === "") {
+      return;
+    }
+
+    const data = {
+      step: "university",
+      data: {
+        name: institution?.name,
+        acronym: institution?.acronym
+      }
+    }
+
+    mutate(data)
+  }
+
+
+  if (isPending) { return <Loader heading="Setting up your University" description="We are Setting up your University" /> }
 
 
 
@@ -59,7 +102,7 @@ function SchoolForm() {
           <h3 className="text-2xl font-semibold text-neutral-900">Institution Information</h3>
           <p className="text-neutral-700 text-sm">Help us match your account to your campus security team.</p>
         </div>
-        <form className="space-y-6 flex flex-col">
+        <form className="space-y-6 flex flex-col" onSubmit={handleSubmitSchool}>
           <FieldSet className="w-full">
             <FieldGroup>
               <Field>
@@ -72,8 +115,8 @@ function SchoolForm() {
                     <ComboboxEmpty>No items found.</ComboboxEmpty>
                     <ComboboxList>
                       {(item) => (
-                        <ComboboxItem key={item} value={item}>
-                          {item}
+                        <ComboboxItem key={item.name} value={item.name}>
+                          {item.name}
                         </ComboboxItem>
                       )}
                     </ComboboxList>
@@ -86,7 +129,7 @@ function SchoolForm() {
         </form >
 
       </div>
-      <Button className="mt-auto" onClick={() => navigate("/dashboard")}>Continue</Button>
+      <Button className="mt-auto" onClick={handleSubmitSchool}>Continue</Button>
     </div >
   )
 }

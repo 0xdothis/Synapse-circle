@@ -1,5 +1,5 @@
 import {create} from "zustand"
-import {persist} from "zustand/middleware"
+import {createJSONStorage, persist} from "zustand/middleware"
 import type { AuthState} from "@/types"
 
 
@@ -7,7 +7,8 @@ export const useAuthStore = create<AuthState>()(
     persist((set) => ({
         email: null,
         token: null,
-    signup: (token:string, email: string) => set({ token, email }),
+        isVerified: null,
+    signup: (token:string, email: string, isVerified: boolean) => set({ token, email, isVerified }),
     login: (token: string) => set({ token }),
     logout: () => {
 
@@ -16,7 +17,7 @@ export const useAuthStore = create<AuthState>()(
             useAuthStore.persist.clearStorage();
         }
     }),
-        {name: "safewalk", partialize: (state) => ({token: state.token, email: state.email})}
+        {name: "safewalk",   storage: createJSONStorage(() => localStorage)}
 
     )
 )

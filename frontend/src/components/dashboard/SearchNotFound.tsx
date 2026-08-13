@@ -2,7 +2,13 @@ import Button from "@/components/ui/button";
 import { SearchRemoveIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-function SearchNotFound() {
+type SearchProps = {
+  title: string;
+  description: string;
+  clear: () => void;
+}
+
+function SearchNotFound({ title, description, clear }: SearchProps) {
 
   return (
     <div className="text-center flex flex-col items-center space-y-4 px-4 py-10">
@@ -10,11 +16,11 @@ function SearchNotFound() {
         <HugeiconsIcon icon={SearchRemoveIcon} size={40} />
       </div>
       <div className="space-y-1.5">
-        <h3 className="text-neutral-900 font-bold">No hospitals match your search</h3>
-        <p className="text-sm text-neutral-700">Double-check your spelling or try searching for another clinic/hospital type.</p>
+        <h3 className="text-neutral-900 font-bold">{title}</h3>
+        <p className="text-sm text-neutral-700">{description}</p>
       </div>
 
-      <Button variant="outline" size="sm" className="w-60">Clear Search</Button>
+      <Button variant="outline" size="sm" className="w-60" onClick={clear}>Clear Search</Button>
     </div>
   )
 }
