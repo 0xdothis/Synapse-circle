@@ -41,6 +41,17 @@ const resolveUserFromToken = async (token) => {
     };
   }
 
+  if (user.isDeleted) {
+    return {
+      errorStatus: 400,
+      errorBody: {
+        success: false,
+        message: "Account has already been deleted.",
+        code: "ACCOUNT_DELETED",
+      },
+    };
+  }
+
   if (!user.isActive) {
     return {
       errorStatus: 403,
@@ -226,15 +237,7 @@ const isOwnResource = (paramName = "id") => {
 };
 
 /**
- * Require the token's emailVerified claim to be true. Use this on
- * routes that should be blocked for accounts that signed up but have
- * not yet completed OTP verification. Must run after `authenticate`.
- *
- * Note: this checks the JWT claim (fast, no DB read), which reflects
- * verification status as of when the current access token was issued
- * or last refreshed — not necessarily this exact instant. That's an
- * acceptable staleness window given access tokens are short-lived
- * (15m default) and refresh rotation re-syncs from the DB.
+ * Require the token's emailVerified claim to be true.
  */
 const requireVerified = (req, res, next) => {
   if (!req.tokenClaims?.emailVerified) {

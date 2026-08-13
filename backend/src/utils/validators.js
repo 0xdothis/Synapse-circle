@@ -4,6 +4,7 @@ import { PHONE_REGEX, EMAIL_REGEX } from "./regex.js";
  * Phone number validation
  */
 const isValidPhoneNumber = (phoneNumber) => {
+  if (!phoneNumber) return true; // Optional
   return PHONE_REGEX.test(phoneNumber);
 };
 
@@ -113,7 +114,7 @@ const isValidObjectId = (id) => {
  */
 const sanitizeInput = (input) => {
   if (typeof input !== "string") return input;
-  return input.replace(/<[^>]*>/g, "").trim();
+  return input.replace(/<[^>]{1,1000}>/g, "").trim();
 };
 
 /**
@@ -175,6 +176,39 @@ const isValidDate = (date) => {
 };
 
 /**
+ * University name validation
+ */
+const isValidUniversityName = (name) => {
+  return name && name.trim().length > 0 && name.trim().length <= 100;
+};
+
+/**
+ * University acronym validation
+ * Must be 2-10 characters, alphanumeric only
+ */
+const isValidUniversityAcronym = (acronym) => {
+  if (!acronym) return false;
+  const clean = acronym.trim().toUpperCase();
+  return /^[A-Z0-9]{2,10}$/.test(clean);
+};
+
+/**
+ * University location validation
+ */
+const isValidUniversityLocation = (location) => {
+  if (!location) return true; // Optional field
+  return typeof location === "string" && location.trim().length > 0;
+};
+
+/**
+ * Normalize university acronym (uppercase, no spaces)
+ */
+const normalizeUniversityAcronym = (acronym) => {
+  if (!acronym) return "";
+  return acronym.trim().toUpperCase().replace(/\s+/g, "");
+};
+
+/**
  * Validate if a string contains a valid time in HH:MM format (24-hour)
  */
 const isValidTime = (time) => {
@@ -189,6 +223,10 @@ const validators = {
   isValidLongitude,
   isValidOTP,
   isValidRelationship,
+  isValidUniversityName,
+  isValidUniversityAcronym,
+  isValidUniversityLocation,
+  normalizeUniversityAcronym,
   sanitizePhoneNumber,
   sanitizeEmail,
   sanitizeInput,

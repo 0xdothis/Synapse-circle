@@ -46,6 +46,10 @@ const options = {
         description: "User profile management including profile pictures",
       },
       {
+        name: "University",
+        description: "University management and campus security contacts",
+      },
+      {
         name: "Health",
         description: "API health check and status",
       },
@@ -262,8 +266,8 @@ const options = {
               nullable: true,
               example: "https://res.cloudinary.com/.../profile_123.jpg",
             },
-            university: { type: "string", example: "Stanford University" },
-            universityId: { type: "string", nullable: true },
+            university: { type: "string", example: "University of Lagos" },
+            universityAcronym: { type: "string", example: "UNILAG" },
             onboardingStep: {
               type: "string",
               enum: [
@@ -294,6 +298,78 @@ const options = {
           },
         },
 
+        // UNIVERSITY SCHEMAS
+        University: {
+          type: "object",
+          properties: {
+            name: {
+              type: "string",
+              example: "University of Lagos",
+              description: "Full name of the university",
+            },
+            acronym: {
+              type: "string",
+              example: "UNILAG",
+              description: "University acronym (unique identifier)",
+            },
+            location: {
+              type: "string",
+              example: "Akoka, Yaba, Lagos, Nigeria",
+              description: "Location of the university",
+            },
+          },
+        },
+        UniversityDetails: {
+          type: "object",
+          properties: {
+            acronym: {
+              type: "string",
+              example: "UNILAG",
+            },
+            name: {
+              type: "string",
+              example: "University of Lagos",
+            },
+            location: {
+              type: "string",
+              nullable: true,
+              example: "Akoka, Yaba, Lagos, Nigeria",
+            },
+            securityContacts: {
+              type: "array",
+              items: {
+                $ref: "#/components/schemas/CampusSecurity",
+              },
+            },
+            totalUsers: {
+              type: "integer",
+              example: 5,
+            },
+            users: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  id: {
+                    type: "string",
+                  },
+                  name: {
+                    type: "string",
+                  },
+                  email: {
+                    type: "string",
+                    format: "email",
+                  },
+                  profilePicture: {
+                    type: "string",
+                    nullable: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+
         // PROFILE SCHEMAS
         Profile: {
           type: "object",
@@ -303,7 +379,7 @@ const options = {
             email: { type: "string", format: "email" },
             profilePicture: { type: "string", nullable: true },
             university: { type: "string" },
-            universityId: { type: "string", nullable: true },
+            universityAcronym: { type: "string", nullable: true },
             isVerified: { type: "boolean" },
             isActive: { type: "boolean" },
             preferences: {
@@ -356,7 +432,8 @@ const options = {
             name: { type: "string", maxLength: 100 },
             email: { type: "string", format: "email" },
             university: { type: "string" },
-            universityId: { type: "string" },
+            universityAcronym: { type: "string" },
+            universityLocation: { type: "string" },
             preferences: {
               type: "object",
               properties: {
@@ -659,6 +736,7 @@ const options = {
             phoneNumber: { type: "string" },
             email: { type: "string", format: "email" },
             location: { type: "string" },
+            universityAcronym: { type: "string" },
             isPrimary: { type: "boolean" },
             isActive: { type: "boolean" },
             operatingHours: { type: "string" },
@@ -729,7 +807,6 @@ const options = {
                     longitude: { type: "number" },
                   },
                 },
-                universityId: { type: "string" },
                 selectedUniversity: { type: "string" },
                 contacts: {
                   type: "array",

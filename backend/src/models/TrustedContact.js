@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { EMAIL_REGEX } from "../utils/regex.js";
+import { PHONE_REGEX } from "../middlewares/validator.js";
 import config from "../utils/config.js";
 
 const trustedContactSchema = new mongoose.Schema(
@@ -23,6 +24,18 @@ const trustedContactSchema = new mongoose.Schema(
       lowercase: true,
       match: [EMAIL_REGEX, "Please enter a valid email"],
     },
+    phoneNumber: {
+      type: String,
+      trim: true,
+      default: null,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          return PHONE_REGEX.test(v);
+        },
+        message: "Please enter a valid phone number",
+      },
+    },
     relationship: {
       type: String,
       required: [true, "Relationship is required"],
@@ -43,9 +56,10 @@ const trustedContactSchema = new mongoose.Schema(
   },
 );
 
-// Composite index for user and contact
+// Composite index for user and email (unique)
 trustedContactSchema.index({ userId: 1, email: 1 }, { unique: true });
 
+// Pre-save hook to enforce max contacts limit
 trustedContactSchema.pre("save", async function (next) {
   const isBecomingActive = this.isNew
     ? this.isActive
@@ -71,6 +85,7 @@ trustedContactSchema.pre("save", async function (next) {
   next();
 });
 
+// Transform the document when serializing to JSON
 trustedContactSchema.methods.toJSON = function () {
   const contact = this.toObject({ virtuals: true });
   delete contact.__v;

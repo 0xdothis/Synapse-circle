@@ -3,6 +3,7 @@ import TrustedContact from "../models/TrustedContact.js";
 import config from "./config.js";
 import { logger } from "./logger.js";
 import { EMAIL_REGEX } from "./regex.js";
+import { PHONE_REGEX } from "../middlewares/validator.js";
 
 /**
  * Validate a single contact
@@ -21,6 +22,16 @@ export const validateContact = (contact, index) => {
   if (!EMAIL_REGEX.test(contact.email)) {
     throw new Error(`Contact at index ${index} has invalid email format`);
   }
+
+  // Phone number validation - using centralized regex from validator
+  if (contact.phoneNumber?.trim()) {
+    if (!PHONE_REGEX.test(contact.phoneNumber.trim())) {
+      throw new Error(
+        `Contact at index ${index} has invalid phone number format`,
+      );
+    }
+  }
+
   const validRelationships = [
     "parent",
     "sibling",
@@ -128,7 +139,7 @@ export const processOnboardingContacts = async (userId, contacts) => {
     return result;
   }
 
-  // Step 1: Deduplicate contacts within the request
+  // Deduplicate contacts within the request
   const { uniqueContacts, duplicateInRequest } = deduplicateContacts(contacts);
   if (duplicateInRequest.length > 0) {
     result.contactsErrors.push({
@@ -169,7 +180,7 @@ export const processOnboardingContacts = async (userId, contacts) => {
 
   const contactsToAdd = uniqueContacts.slice(0, maxAllowed);
 
-  // Step 4: Check for duplicates against existing contacts
+  // Check for duplicates against existing contacts
   const { contactsToCreate, skippedContacts } = await getExistingDuplicates(
     userId,
     contactsToAdd,
@@ -185,7 +196,7 @@ export const processOnboardingContacts = async (userId, contacts) => {
 
   if (contactsToCreate.length > 0) {
     const isPrimary = existingCount === 0;
-    const { created, contactsAdded, error } = await createContactsInTransaction(
+    const { contactsAdded, error } = await createContactsInTransaction(
       userId,
       contactsToCreate,
       isPrimary,
@@ -198,7 +209,7 @@ export const processOnboardingContacts = async (userId, contacts) => {
     }
   }
 
-  // Step 6: Determine if we should update the step
+  // Determine if we should update the step
   const finalCount = await TrustedContact.countDocuments({
     userId,
     isActive: true,
@@ -209,6 +220,133 @@ export const processOnboardingContacts = async (userId, contacts) => {
   }
 
   return result;
+};
+
+/**
+ * Shape raw contact input into TrustedContact-ready documents.
+ */
+const buildContactDocs = (userId, contacts, isPrimary) =>
+  contacts.map((contact, index) => ({
+    userId,
+    name: contact.name.trim(),
+    email: contact.email.toLowerCase().trim(),
+    phoneNumber: contact.phoneNumber?.trim() || null,
+    relationship: contact.relationship,
+    isPrimary: isPrimary && index === 0,
+  }));
+
+const duplicateContactError = (type, message) => ({
+  created: [],
+  contactsAdded: 0,
+  error: { type, message },
+});
+
+/**
+ * Insert contacts without a transaction. Standalone MongoDB (used in
+ * tests) doesn't support them, so this path is a plain insertMany.
+ */
+const insertContactsInTestEnv = async (userId, contacts, isPrimary) => {
+  const contactDocs = buildContactDocs(userId, contacts, isPrimary);
+
+  try {
+    const created = await TrustedContact.insertMany(contactDocs);
+    return { created, contactsAdded: created.length, error: null };
+  } catch (error) {
+    if (error.code === 11000) {
+      return duplicateContactError("duplicate", "Some contacts already exist");
+    }
+    throw error;
+  }
+};
+
+/**
+ * Abort a session, swallowing (and logging) any error from the abort
+ * itself so it never masks the original failure.
+ */
+const safeAbortTransaction = async (session) => {
+  try {
+    await session.abortTransaction();
+  } catch (abortError) {
+    logger.error("Error aborting transaction:", abortError);
+  }
+};
+
+const safeEndSession = async (session) => {
+  try {
+    await session.endSession();
+  } catch (endError) {
+    logger.error("Error ending session:", endError);
+  }
+};
+
+/**
+ * Insert contacts inside a transaction, re-checking capacity within the
+ * session to guard against a concurrent request pushing the user over
+ * config.maxTrustedContacts.
+ */
+const insertContactsWithinTransaction = async (
+  session,
+  userId,
+  contacts,
+  isPrimary,
+) => {
+  const contactDocs = buildContactDocs(userId, contacts, isPrimary);
+  const created = await TrustedContact.insertMany(contactDocs, { session });
+
+  const finalCount = await TrustedContact.countDocuments({
+    userId,
+    isActive: true,
+  }).session(session);
+
+  if (finalCount > config.maxTrustedContacts) {
+    await session.abortTransaction();
+    return {
+      created: [],
+      contactsAdded: 0,
+      error: {
+        type: "concurrent_operation",
+        message:
+          "Another operation added contacts concurrently. Please try again.",
+        currentCount: finalCount,
+        maxContacts: config.maxTrustedContacts,
+      },
+    };
+  }
+
+  await session.commitTransaction();
+  return { created, contactsAdded: created.length, error: null };
+};
+
+const insertContactsInProduction = async (userId, contacts, isPrimary) => {
+  let session;
+
+  try {
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    return await insertContactsWithinTransaction(
+      session,
+      userId,
+      contacts,
+      isPrimary,
+    );
+  } catch (error) {
+    if (session) {
+      await safeAbortTransaction(session);
+    }
+
+    if (error.code === 11000) {
+      return duplicateContactError(
+        "duplicate_concurrent",
+        "Some contacts were added in another request. Please refresh and try again.",
+      );
+    }
+    throw error;
+  } finally {
+    if (session) {
+      await safeEndSession(session);
+    }
+  }
 };
 
 /**
@@ -225,102 +363,10 @@ export const createContactsInTransaction = async (
 
   // Skip transactions in test environment (standalone MongoDB doesn't support them)
   if (process.env.NODE_ENV === "test") {
-    try {
-      const contactDocs = contacts.map((contact, index) => ({
-        userId,
-        name: contact.name.trim(),
-        email: contact.email.toLowerCase().trim(),
-        relationship: contact.relationship,
-        isPrimary: isPrimary && index === 0,
-      }));
-
-      const created = await TrustedContact.insertMany(contactDocs);
-      return { created, contactsAdded: created.length, error: null };
-    } catch (error) {
-      if (error.code === 11000) {
-        return {
-          created: [],
-          contactsAdded: 0,
-          error: {
-            type: "duplicate",
-            message: "Some contacts already exist",
-          },
-        };
-      }
-      throw error;
-    }
+    return insertContactsInTestEnv(userId, contacts, isPrimary);
   }
 
-  // Production: Use transactions
-  let session;
-
-  try {
-    session = await mongoose.startSession();
-    session.startTransaction();
-
-    const contactDocs = contacts.map((contact, index) => ({
-      userId,
-      name: contact.name.trim(),
-      email: contact.email.toLowerCase().trim(),
-      relationship: contact.relationship,
-      isPrimary: isPrimary && index === 0,
-    }));
-
-    const created = await TrustedContact.insertMany(contactDocs, { session });
-
-    const finalCount = await TrustedContact.countDocuments({
-      userId,
-      isActive: true,
-    }).session(session);
-
-    if (finalCount > config.maxTrustedContacts) {
-      await session.abortTransaction();
-      return {
-        created: [],
-        contactsAdded: 0,
-        error: {
-          type: "concurrent_operation",
-          message:
-            "Another operation added contacts concurrently. Please try again.",
-          currentCount: finalCount,
-          maxContacts: config.maxTrustedContacts,
-        },
-      };
-    }
-
-    await session.commitTransaction();
-    return { created, contactsAdded: created.length, error: null };
-  } catch (error) {
-    if (session) {
-      try {
-        await session.abortTransaction();
-      } catch (abortError) {
-        logger.error("Error aborting transaction:", abortError);
-      }
-    }
-
-    if (error.code === 11000) {
-      return {
-        created: [],
-        contactsAdded: 0,
-        error: {
-          type: "duplicate_concurrent",
-          message:
-            "Some contacts were added in another request. Please refresh and try again.",
-        },
-      };
-    }
-
-    throw error;
-  } finally {
-    if (session) {
-      try {
-        await session.endSession();
-      } catch (endError) {
-        logger.error("Error ending session:", endError);
-      }
-    }
-  }
+  return insertContactsInProduction(userId, contacts, isPrimary);
 };
 
 export default {

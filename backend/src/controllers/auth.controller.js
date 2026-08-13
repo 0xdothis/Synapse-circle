@@ -1,16 +1,11 @@
 import authService from "../services/auth.service.js";
 import { logger } from "../utils/logger.js";
+import User from "../models/User.js";
 
 const getIncomingRefreshToken = (req) => req.body?.refreshToken || null;
 
 /**
  * Session response strategy
- * All clients (web and mobile) receive accessToken/refreshToken directly
- * in the JSON body. Clients are responsible for storing them and sending
- * `Authorization: Bearer <accessToken>` on subsequent requests.
- * `emailVerified` must be passed explicitly by every caller — it gets
- * baked into the JWT claims so downstream middleware can gate specific
- * routes on verification status without an extra DB round trip.
  */
 const respondWithSession = async (
   req,
@@ -23,11 +18,14 @@ const respondWithSession = async (
     { userAgent: req.headers["user-agent"], ip: req.ip },
   );
 
+  // Build full user response with contacts
+  const userResponse = await authService.buildUserResponse(user);
+
   return res.status(status).json({
     success: true,
     message,
     ...extra,
-    user,
+    user: userResponse,
     accessToken,
     refreshToken,
   });
@@ -58,7 +56,7 @@ const signup = async (req, res, next) => {
       res,
       {
         message: result.message,
-        user: authService.buildUserResponse(result.user),
+        user: result.user,
         extra: result.developmentOtp
           ? { development_otp: result.developmentOtp }
           : {},
@@ -67,7 +65,7 @@ const signup = async (req, res, next) => {
         userId: result.user._id,
         email: result.user.email,
         role: result.user.role || "user",
-        emailVerified: result.user.isVerified, // false at this point
+        emailVerified: result.user.isVerified,
       },
     );
   } catch (error) {
@@ -104,7 +102,7 @@ const login = async (req, res, next) => {
       res,
       {
         message: "Login successful",
-        user: authService.buildUserResponse(user),
+        user: user,
       },
       {
         userId: user._id,
@@ -132,30 +130,47 @@ const verifyOtp = async (req, res, next) => {
       res,
       {
         message: "OTP verified successfully",
-        user: authService.buildUserResponse(result.user),
+        user: result.user,
       },
       {
         userId: result.user._id,
         email: result.user.email,
         role: result.user.role || "user",
-        // OTP verification is itself the proof of ownership — treat as
-        // verified even if the DB write hasn't been made elsewhere.
         emailVerified: true,
       },
     );
   } catch (error) {
-    if (error.message === "Invalid or expired OTP") {
-      return res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-    if (error.message === "User not found") {
+    const message = error.message || "";
+
+    // Handle specific error cases
+    if (message === "User not found") {
       return res.status(404).json({
         success: false,
         message: "User not found. Please sign up first.",
       });
     }
+
+    if (message === "Invalid or expired OTP" || message.includes("expired")) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired OTP",
+      });
+    }
+
+    if (message === "OTP has expired") {
+      return res.status(400).json({
+        success: false,
+        message: "OTP has expired. Please request a new one.",
+      });
+    }
+
+    // Log unexpected errors
+    logger.error("Unexpected OTP verification error:", {
+      message: error.message,
+      stack: error.stack,
+      email: req.body.email,
+    });
+
     next(error);
   }
 };
@@ -184,7 +199,7 @@ const googleAuth = async (req, res, next) => {
       {
         message: isNewUser ? "Account created with Google" : "Login successful",
         extra: { isNewUser },
-        user: authService.buildUserResponse(user),
+        user: user,
       },
       {
         userId: user._id,
@@ -253,7 +268,7 @@ const refreshToken = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Tokens refreshed successfully",
-      user: authService.buildUserResponse(user),
+      user: await authService.buildUserResponse(user),
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
     });
@@ -359,9 +374,10 @@ const getMe = async (req, res, next) => {
     const user = await authService.getMe(req.userId);
 
     if (!user) {
-      return res.status(404).json({
+      return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "Account has already been deleted.",
+        code: "ACCOUNT_DELETED",
       });
     }
 
@@ -492,6 +508,67 @@ const changePassword = async (req, res, next) => {
   }
 };
 
+/**
+ * DELETE /api/auth/account
+ * Delete user account
+ */
+const deleteAccount = async (req, res, next) => {
+  try {
+    const { password, reason = "user_requested" } = req.body;
+
+    // Get the user from the database (password is select:false by default,
+    // so it must be explicitly requested or the checks below never fire)
+    const user = await User.findById(req.userId).select("+password");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // If user has password (local auth), require current password
+    if (user.authProvider === "local" && user.password) {
+      if (!password) {
+        return res.status(400).json({
+          success: false,
+          message: "Current password is required to delete your account.",
+        });
+      }
+    }
+
+    // For Google auth users, require a confirmation flag
+    if (user.authProvider === "google" && !user.password) {
+      if (!req.body.confirm) {
+        return res.status(400).json({
+          success: false,
+          message: "Please confirm account deletion by setting confirm: true.",
+        });
+      }
+    }
+
+    const result = await authService.deleteAccount(
+      req.userId,
+      password,
+      reason,
+    );
+
+    if (result.error) {
+      return res.status(result.error.status).json({
+        success: false,
+        message: result.error.message,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+    });
+  } catch (error) {
+    logger.error("Delete account error:", error);
+    next(error);
+  }
+};
+
 export default {
   signup,
   login,
@@ -507,4 +584,5 @@ export default {
   verifyResetOtp,
   resetPassword,
   changePassword,
+  deleteAccount,
 };

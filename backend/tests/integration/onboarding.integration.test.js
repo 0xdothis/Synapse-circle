@@ -89,14 +89,16 @@ describe("Onboarding Integration Tests", () => {
       expect(contact.name).toBe("Test Contact");
     });
 
-    it("should update to university step", async () => {
+    it("should update to university step with name and acronym", async () => {
       const res = await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({
           step: "university",
           data: {
-            selectedUniversity: "Test University",
+            name: "Test University",
+            acronym: "TU",
+            location: "Test City",
           },
         })
         .expect(200);
@@ -106,7 +108,24 @@ describe("Onboarding Integration Tests", () => {
       expect(res.body).toHaveProperty("progress", 80);
 
       const user = await User.findById(userId);
+      expect(user.university.name).toBe("Test University");
+      expect(user.university.acronym).toBe("TU");
       expect(user.selectedUniversity).toBe("Test University");
+    });
+
+    it("should reject a university acronym sent without a name", async () => {
+      const res = await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({
+          step: "university",
+          data: {
+            acronym: "TU",
+          },
+        })
+        .expect(400);
+
+      expect(res.body).toHaveProperty("success", false);
     });
 
     it("should complete onboarding", async () => {

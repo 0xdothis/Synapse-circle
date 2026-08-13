@@ -21,12 +21,13 @@ const getContacts = async (req, res, next) => {
  */
 const createContact = async (req, res, next) => {
   try {
-    const { name, email, relationship } = req.body;
+    const { name, email, relationship, phoneNumber } = req.body;
 
     const result = await contactsService.addContact(req.userId, {
       name,
       email,
       relationship,
+      phoneNumber,
     });
 
     if (result.conflict) {
@@ -60,12 +61,13 @@ const createContact = async (req, res, next) => {
  */
 const updateContact = async (req, res) => {
   const { contactId } = req.params;
-  const { name, email, relationship, isPrimary } = req.body;
+  const { name, email, relationship, phoneNumber, isPrimary } = req.body;
 
   const result = await contactsService.editContact(req.userId, contactId, {
     name,
     email,
     relationship,
+    phoneNumber,
     isPrimary,
   });
 

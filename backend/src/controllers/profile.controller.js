@@ -74,13 +74,14 @@ const deletePicture = async (req, res) => {
  * PUT /api/profile/me
  */
 const updateProfile = async (req, res) => {
-  const { name, email, university, universityId, preferences } = req.body;
+  const { name, email, university, acronym, location, preferences } = req.body;
 
   const result = await profileService.updateProfile(req.userId, {
     name,
     email,
     university,
-    universityId,
+    acronym,
+    location,
     preferences,
   });
 

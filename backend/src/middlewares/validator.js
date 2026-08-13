@@ -1,8 +1,24 @@
 import { body, validationResult } from "express-validator";
 import { EMAIL_REGEX } from "../utils/regex.js";
 
+// Centralized phone number regex.
+export const PHONE_REGEX = /^[+]?[\d\s().-]{7,20}$/;
+
+// A phone number should end up with a sane number of actual digits once
+const MIN_PHONE_DIGITS = 7;
+const MAX_PHONE_DIGITS = 15;
+
+const isPlausiblePhoneShape = (value) => {
+  if (!PHONE_REGEX.test(value)) return false;
+  const digitsOnly = value.replace(/\D/g, "");
+  return (
+    digitsOnly.length >= MIN_PHONE_DIGITS &&
+    digitsOnly.length <= MAX_PHONE_DIGITS
+  );
+};
+
 // Structural check (exactly one '@', non-empty local/domain parts, domain contains a dot)
-const validateEmail = (value) => {
+export const validateEmail = (value) => {
   if (!value || typeof value !== "string") {
     throw new Error("Invalid email format");
   }
@@ -24,8 +40,35 @@ const validateEmail = (value) => {
   return true;
 };
 
+// Centralized phone number validator function
+export const validatePhoneNumber = (value) => {
+  if (!value) return true;
+  if (typeof value !== "string") return false;
+  return isPlausiblePhoneShape(value.trim());
+};
+
+// Centralized phone number validation chain for express-validator
+export const isValidPhoneNumber = (optional = true) => {
+  let chain = body("phoneNumber");
+  if (optional) {
+    chain = chain.optional();
+  } else {
+    chain = chain.notEmpty().withMessage("Phone number is required");
+  }
+  return chain
+    .isString()
+    .withMessage("Phone number must be a string")
+    .custom((value) => {
+      if (!value) return true;
+      if (!isPlausiblePhoneShape(value.trim())) {
+        throw new Error("Please enter a valid phone number");
+      }
+      return true;
+    });
+};
+
 // Validation schemas
-const authValidation = {
+export const authValidation = {
   signup: [
     body("email")
       .notEmpty()
@@ -138,7 +181,7 @@ const authValidation = {
   ],
 };
 
-const contactValidation = {
+export const contactValidation = {
   create: [
     body("name")
       .notEmpty()
@@ -150,6 +193,7 @@ const contactValidation = {
       .withMessage("Email is required")
       .isEmail()
       .withMessage("Please enter a valid email address"),
+    isValidPhoneNumber(true),
     body("relationship")
       .notEmpty()
       .withMessage("Relationship is required")
@@ -166,6 +210,7 @@ const contactValidation = {
       .optional()
       .isEmail()
       .withMessage("Please enter a valid email address"),
+    isValidPhoneNumber(true),
     body("relationship")
       .optional()
       .isIn(["parent", "sibling", "friend", "roommate", "partner", "other"])
@@ -173,7 +218,7 @@ const contactValidation = {
   ],
 };
 
-const sosValidation = {
+export const sosValidation = {
   trigger: [
     body("latitude")
       .notEmpty()
@@ -199,7 +244,7 @@ const sosValidation = {
   ],
 };
 
-const profileValidation = {
+export const profileValidation = {
   updateName: [
     body("name")
       .notEmpty()
@@ -218,7 +263,7 @@ const profileValidation = {
 };
 
 // Validation result handler
-const validate = (validations) => {
+export const validate = (validations) => {
   return async (req, res, next) => {
     await Promise.all(validations.map((validation) => validation.run(req)));
 
@@ -240,11 +285,52 @@ const validate = (validations) => {
   };
 };
 
-export {
+export const universityValidation = {
+  create: [
+    body("name")
+      .notEmpty()
+      .withMessage("University name is required")
+      .isLength({ max: 100 })
+      .withMessage("University name cannot exceed 100 characters"),
+    body("acronym")
+      .notEmpty()
+      .withMessage("University acronym is required")
+      .isLength({ min: 2, max: 10 })
+      .withMessage("Acronym must be between 2 and 10 characters")
+      .matches(/^[A-Za-z0-9]+$/)
+      .withMessage("Acronym can only contain letters and numbers"),
+    body("location")
+      .optional()
+      .isString()
+      .withMessage("Location must be a string"),
+  ],
+  update: [
+    body("name")
+      .optional()
+      .isLength({ max: 100 })
+      .withMessage("University name cannot exceed 100 characters"),
+    body("acronym")
+      .optional()
+      .isLength({ min: 2, max: 10 })
+      .withMessage("Acronym must be between 2 and 10 characters")
+      .matches(/^[A-Za-z0-9]+$/)
+      .withMessage("Acronym can only contain letters and numbers"),
+    body("location")
+      .optional()
+      .isString()
+      .withMessage("Location must be a string"),
+  ],
+};
+
+export default {
   validate,
   authValidation,
   contactValidation,
+  universityValidation,
   sosValidation,
   profileValidation,
   validateEmail,
+  validatePhoneNumber,
+  isValidPhoneNumber,
+  PHONE_REGEX,
 };

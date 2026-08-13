@@ -21,246 +21,223 @@ const seedData = async () => {
     await EmergencyDirectory.deleteMany({});
     console.log("🧹 Cleared existing data");
 
-    // 1. Seed Campus Security
+    // Seed Campus Security for Each University
     const securityContacts = [
       {
-        name: "Campus Security Main Desk",
-        phoneNumber: "08134490997",
+        name: "UNILAG Security Headquarters",
+        phoneNumber: "+2348093541837",
         email: "acientguru@gmail.com",
-        location: "Main Building, Ground Floor",
+        location: "Senate Building, University of Lagos, Akoka",
         coordinates: {
-          type: "Point",
-          coordinates: [-122.4194, 37.7749],
+          latitude: 6.5178,
+          longitude: 3.3959,
         },
+        universityAcronym: "UNILAG",
         isPrimary: true,
-        description: "24/7 Campus Security Main Desk",
+        description: "Main Security Office - 24/7 Campus Security",
         operatingHours: "24/7",
       },
       {
-        name: "Campus Security Night Patrol",
-        phoneNumber: "07070749664",
-        email: "ephraimnyikwagh@gmail.com",
-        location: "Security Booth, Gate A",
+        name: "UNILAG Gate A Security Post",
+        phoneNumber: "+2348182844317",
+        email: "pjonyinyechi77@gmail.com",
+        location: "Main Gate A, University of Lagos, Akoka",
         coordinates: {
-          type: "Point",
-          coordinates: [-122.4195, 37.775],
+          latitude: 6.5172,
+          longitude: 3.3952,
         },
+        universityAcronym: "UNILAG",
         isPrimary: false,
-        description: "Night Patrol Unit - 9:00 PM to 6:00 AM",
-        operatingHours: "9:00 PM - 6:00 AM",
+        description: "Main Entrance Security - 24/7 Access Control",
+        operatingHours: "24/7",
+      },
+      {
+        name: "UNILAG Hostel Security",
+        phoneNumber: "+2348034567892",
+        email: "onyijohn556@gmail.com",
+        location: "Student Hostel Complex, University of Lagos",
+        coordinates: {
+          latitude: 6.518,
+          longitude: 3.396,
+        },
+        universityAcronym: "UNILAG",
+        isPrimary: false,
+        description: "Hostel Security - Student Safety & Welfare",
+        operatingHours: "24/7",
+      },
+
+      // ---------- UI Security ----------
+      {
+        name: "UI Security Department",
+        phoneNumber: "+2348034567893",
+        email: "thanksayo29@gmail.com",
+        location: "Administrative Building, University of Ibadan",
+        coordinates: {
+          latitude: 7.4478,
+          longitude: 3.8986,
+        },
+        universityAcronym: "UI",
+        isPrimary: true,
+        description: "Main Security Office - 24/7 Campus Security",
+        operatingHours: "24/7",
+      },
+      {
+        name: "UI Gate Security",
+        phoneNumber: "+2348034567894",
+        email: "preshjohn07@gmail.com",
+        location: "Main Gate, University of Ibadan",
+        coordinates: {
+          latitude: 7.4472,
+          longitude: 3.898,
+        },
+        universityAcronym: "UI",
+        isPrimary: false,
+        description: "Main Entrance Security - 24/7 Access Control",
+        operatingHours: "24/7",
+      },
+      {
+        name: "UI Halls of Residence Security",
+        phoneNumber: "+2348034567895",
+        email: "ephraimnyikwagh@gmail.com",
+        location: "Halls of Residence, University of Ibadan",
+        coordinates: {
+          latitude: 7.4475,
+          longitude: 3.8983,
+        },
+        universityAcronym: "UI",
+        isPrimary: false,
+        description: "Halls of Residence Security - Student Welfare",
+        operatingHours: "24/7",
+      },
+
+      // ---------- CU Security ----------
+      {
+        name: "MIVA Security Services",
+        phoneNumber: "+2348034567896",
+        email: "fayokebg@gmail.com",
+        location: "Security Building, MIVA University, Canaan Land",
+        coordinates: {
+          latitude: 6.6734,
+          longitude: 3.1608,
+        },
+        universityAcronym: "CU",
+        isPrimary: true,
+        description: "Main Security Office - 24/7 Campus Security",
+        operatingHours: "24/7",
+      },
+      {
+        name: "MIVA Gate Security",
+        phoneNumber: "+2348034567897",
+        email: "preciousjohn38@outlook.com",
+        location: "Main Gate, MIVA University, Canaan Land",
+        coordinates: {
+          latitude: 6.6728,
+          longitude: 3.1602,
+        },
+        universityAcronym: "CU",
+        isPrimary: false,
+        description: "Main Entrance Security - 24/7 Access Control",
+        operatingHours: "24/7",
+      },
+      {
+        name: "MIVA Student Hostel Security",
+        phoneNumber: "+2348034567898",
+        email: "t.agbeble8372@miva.edu.ng",
+        location: "Student Hostel, MIVA University",
+        coordinates: {
+          latitude: 6.673,
+          longitude: 3.1605,
+        },
+        universityAcronym: "CU",
+        isPrimary: false,
+        description: "Hostel Security - Student Safety & Welfare",
+        operatingHours: "24/7",
       },
     ];
 
     await CampusSecurity.insertMany(securityContacts);
-    console.log("✅ Campus Security seeded (2 contacts)");
-    
-    // 2. Seed Emergency Directory - Complete
+    console.log(
+      `✅ Campus Security seeded (${securityContacts.length} contacts)`,
+    );
+
+    // 2. Seed Emergency Directory - Shared Across All Universities
     const emergencyContacts = [
-      // ---------- SECURITY ----------
       {
         type: "security",
-        name: "University Police Department",
-        phoneNumber: "08065706129",
-        email: "fayokebg@gmail.com",
-        address: "University Police Station, Campus Road",
+        name: "Lagos State Emergency Agency (LASEMA)",
+        phoneNumber: "767",
+        email: "nou193150822@noun.edu.ng",
+        address: "Lagos State Emergency Management Agency, Ikeja, Lagos",
         coordinates: {
           type: "Point",
-          coordinates: [-122.4196, 37.7751],
+          coordinates: [3.3956, 6.5175],
         },
         isVerified: true,
-        description: "Campus Police Department - 24/7 Emergency Response",
-        operatingHours: "24/7",
-      },
-      {
-        type: "security",
-        name: "Campus Safety Escort Service",
-        phoneNumber: "08066667777",
-        email: "pjonyinyechi77@gmail.com",
-        address: "Safety Office, Student Center",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.418, 37.776],
-        },
-        isVerified: true,
-        description: "Safety Escort Service - Available 24/7",
+        description: "Lagos State Emergency Hotline - 24/7",
         operatingHours: "24/7",
       },
 
       // ---------- HOSPITALS ----------
       {
         type: "hospital",
-        name: "University Health Services",
-        phoneNumber: "08055551234",
-        email: "thanksagbeble@gmail.com",
-        address: "Health Center Building, East Campus",
+        name: "Lagos University Teaching Hospital (LUTH)",
+        phoneNumber: "+2348023456789",
+        email: "nou251055933@noun.edu.ng",
+        address: "1 Idi-Araba, Surulere, Lagos",
         coordinates: {
           type: "Point",
-          coordinates: [-122.416, 37.7765],
+          coordinates: [3.3956, 6.5175],
         },
         isVerified: true,
-        description: "Campus Health Center - Emergency Medical Services",
-        operatingHours: "8:00 AM - 10:00 PM",
-      },
-      {
-        type: "hospital",
-        name: "City General Hospital",
-        phoneNumber: "08077778888",
-        email: "info@citygeneral.gov",
-        address: "123 Main Street, Downtown",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.42, 37.773],
-        },
-        isVerified: true,
-        description: "Full-service hospital with 24/7 Emergency Room",
+        description: "Federal Government Teaching Hospital - 24/7 Emergency",
         operatingHours: "24/7",
-      },
-      {
-        type: "hospital",
-        name: "St. Mary's Medical Center",
-        phoneNumber: "08088889999",
-        email: "emergency@stmarys.org",
-        address: "456 Oak Avenue, Northside",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.414, 37.778],
-        },
-        isVerified: true,
-        description: "Level 1 Trauma Center - 24/7 Emergency Care",
-        operatingHours: "24/7",
-      },
-      {
-        type: "hospital",
-        name: "Campus Urgent Care Clinic",
-        phoneNumber: "08099990000",
-        email: "urgentcare@university.edu",
-        address: "789 University Drive, West Campus",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.421, 37.774],
-        },
-        isVerified: true,
-        description: "Walk-in Urgent Care - Non-emergency medical services",
-        operatingHours: "8:00 AM - 8:00 PM",
       },
 
       // ---------- POLICE ----------
       {
         type: "police",
-        name: "City Police Department - Main Station",
-        phoneNumber: "08066668888",
-        email: "police@city.gov",
-        address: "456 Justice Avenue, Downtown",
+        name: "Nigeria Police Force - Oyo State Command",
+        phoneNumber: "+2348034567905",
+        email: "onyijohn556@gmail.com",
+        address: "Police Headquarters, Ibadan",
         coordinates: {
           type: "Point",
-          coordinates: [-122.422, 37.772],
+          coordinates: [3.8983, 7.4475],
         },
         isVerified: true,
-        description: "City Police Department - 24/7 Emergency Response",
+        description: "Oyo State Police Command - 24/7",
         operatingHours: "24/7",
-      },
-      {
-        type: "police",
-        name: "Campus Police Substation",
-        phoneNumber: "08055556666",
-        email: "campuspolice@university.edu",
-        address: "Student Center, Ground Floor",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.4185, 37.7755],
-        },
-        isVerified: true,
-        description: "Campus Police Substation - Student Services",
-        operatingHours: "8:00 AM - 6:00 PM",
       },
 
       // ---------- FIRE ----------
       {
         type: "fire",
-        name: "City Fire Station #1 - Downtown",
-        phoneNumber: "08077779999",
-        email: "fire@city.gov",
-        address: "789 Firehouse Road, Downtown",
+        name: "Lagos State Fire Service",
+        phoneNumber: "112",
+        email: "ephraimnyikwagh@gmail.com",
+        address: "Fire Service Headquarters, Ikeja, Lagos",
         coordinates: {
           type: "Point",
-          coordinates: [-122.423, 37.771],
+          coordinates: [3.3956, 6.5175],
         },
         isVerified: true,
-        description: "Fire and Rescue Services - 24/7 Emergency",
-        operatingHours: "24/7",
-      },
-      {
-        type: "fire",
-        name: "Campus Fire & Rescue Squad",
-        phoneNumber: "08088887777",
-        email: "firerescue@university.edu",
-        address: "North Campus, Fire Station",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.415, 37.7775],
-        },
-        isVerified: true,
-        description: "Campus Fire and Rescue Services",
+        description: "Lagos State Fire Service - 24/7 Emergency",
         operatingHours: "24/7",
       },
 
       // ---------- AMBULANCE ----------
       {
         type: "ambulance",
-        name: "City Emergency Medical Services (EMS)",
-        phoneNumber: "08099998888",
-        email: "ems@city.gov",
-        address: "123 EMS Headquarters, Downtown",
+        name: "LASAMBUS - Lagos State Ambulance Service",
+        phoneNumber: "112",
+        email: "lasambus@lagosstate.examples.ng",
+        address: "Lagos State Ambulance Service, Ikeja",
         coordinates: {
           type: "Point",
-          coordinates: [-122.424, 37.77],
+          coordinates: [3.3956, 6.5175],
         },
         isVerified: true,
-        description: "City EMS - 24/7 Ambulance Services",
-        operatingHours: "24/7",
-      },
-      {
-        type: "ambulance",
-        name: "Campus Ambulance Service",
-        phoneNumber: "08066665555",
-        email: "ambulance@university.edu",
-        address: "Health Center Building, East Campus",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.4165, 37.7768],
-        },
-        isVerified: true,
-        description: "Campus Ambulance - Emergency Medical Transport",
-        operatingHours: "8:00 AM - 10:00 PM",
-      },
-
-      // ---------- ADDITIONAL SUPPORT ----------
-      {
-        type: "security",
-        name: "Crisis Hotline - 24/7 Support",
-        phoneNumber: "08011112222",
-        email: "crisis@support.org",
-        address: "Crisis Support Center, Online",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.419, 37.7745],
-        },
-        isVerified: true,
-        description: "24/7 Crisis Support and Mental Health Services",
-        operatingHours: "24/7",
-      },
-      {
-        type: "hospital",
-        name: "Women's Health Center",
-        phoneNumber: "08022223333",
-        email: "womenshealth@center.org",
-        address: "456 Women's Health Drive, Eastside",
-        coordinates: {
-          type: "Point",
-          coordinates: [-122.413, 37.779],
-        },
-        isVerified: true,
-        description: "Women's Health and Emergency Services",
+        description: "Lagos State Ambulance Services - 24/7",
         operatingHours: "24/7",
       },
     ];
@@ -270,11 +247,26 @@ const seedData = async () => {
       `✅ Emergency Directory seeded (${emergencyContacts.length} contacts)`,
     );
 
-    // ============================================
     // 3. Summary
-    // ============================================
     console.log("\n📊 Seeding Summary:");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    // Count security contacts per university
+    const unilagCount = securityContacts.filter(
+      (c) => c.universityAcronym === "UNILAG",
+    ).length;
+    const uiCount = securityContacts.filter(
+      (c) => c.universityAcronym === "UI",
+    ).length;
+    const cuCount = securityContacts.filter(
+      (c) => c.universityAcronym === "CU",
+    ).length;
+
+    console.log("\n🏫 University Security Contacts:");
+    console.log(`   🏛️  UNILAG: ${unilagCount} contacts`);
+    console.log(`   🏛️  UI: ${uiCount} contacts`);
+    console.log(`   🏛️  CU: ${cuCount} contacts`);
+    console.log(`   📦 Total: ${securityContacts.length} contacts`);
 
     const securityCount = emergencyContacts.filter(
       (c) => c.type === "security",
@@ -290,18 +282,21 @@ const seedData = async () => {
       (c) => c.type === "ambulance",
     ).length;
 
-    console.log(`🔐 Campus Security: ${securityContacts.length} contacts`);
-    console.log(`🛡️  Security Services: ${securityCount} contacts`);
-    console.log(`🏥 Hospitals: ${hospitalCount} contacts`);
-    console.log(`👮 Police: ${policeCount} contacts`);
-    console.log(`🔥 Fire: ${fireCount} contacts`);
-    console.log(`🚑 Ambulance: ${ambulanceCount} contacts`);
-    console.log(
-      `📦 Total Emergency Directory: ${emergencyContacts.length} contacts`,
-    );
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    console.log("\n📦 Emergency Directory:");
+    console.log(`   🛡️  Security Services: ${securityCount} contacts`);
+    console.log(`   🏥 Hospitals: ${hospitalCount} contacts`);
+    console.log(`   👮 Police: ${policeCount} contacts`);
+    console.log(`   🔥 Fire: ${fireCount} contacts`);
+    console.log(`   🚑 Ambulance: ${ambulanceCount} contacts`);
+    console.log(`   📦 Total: ${emergencyContacts.length} contacts`);
 
+    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     console.log("\n🎉 Seeding completed successfully!");
+    console.log("\n📋 Universities seeded:");
+    console.log("   🏛️  UNILAG - University of Lagos");
+    console.log("   🏛️  UI - University of Ibadan");
+    console.log("   🏛️  MV - MIVA University");
+
     process.exit(0);
   } catch (error) {
     console.error("❌ Seeding failed:", error);

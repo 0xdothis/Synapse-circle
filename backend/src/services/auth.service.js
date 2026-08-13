@@ -1,10 +1,14 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
-import mongoose from "mongoose";
 import { OAuth2Client } from "google-auth-library";
+import mongoose from "mongoose";
 import User from "../models/User.js";
 import TrustedContact from "../models/TrustedContact.js";
 import OTP from "../models/OTP.js";
+import SOSAlert from "../models/SOSAlert.js";
+import RefreshToken from "../models/RefreshToken.js";
+import EmergencyDirectory from "../models/EmergencyDirectory.js";
+import CampusSecurity from "../models/CampusSecurity.js";
 import emailService from "./emailService.js";
 import config from "../utils/config.js";
 import { logger } from "../utils/logger.js";
@@ -16,7 +20,18 @@ import {
 } from "./sessionService.js";
 import { processOnboardingContacts } from "../utils/contactHelper.js";
 
-const googleClient = new OAuth2Client(config.googleClientId);
+// Initialize Google Client
+const googleClient = new OAuth2Client({
+  clientId: config.googleClientId,
+  clientSecret: config.googleClientSecret,
+});
+
+// Allow multiple audiences (web, Android, iOS) if configured
+const ALLOWED_GOOGLE_AUDIENCES = [
+  config.googleClientId,
+  config.googleAndroidClientId,
+  config.googleIOSClientId,
+].filter(Boolean);
 
 const STEP_ORDER = [
   "welcome",
@@ -41,7 +56,10 @@ const createUserSession = async (
   return createSession(userId, email, role, emailVerified, meta);
 };
 
-const buildUserResponse = (user) => {
+/**
+ * Build user response with trusted contacts included
+ */
+const buildUserResponse = async (user) => {
   const response = {
     id: user._id,
     name: user.name,
@@ -55,19 +73,85 @@ const buildUserResponse = (user) => {
   if (user.selectedUniversity) {
     response.selectedUniversity = user.selectedUniversity;
   }
-  if (user.universityId) {
-    response.universityId = user.universityId;
+
+  // Add university subdocument if it exists
+  if (user.university?.acronym) {
+    response.university = {
+      name: user.university.name,
+      acronym: user.university.acronym,
+      location: user.university.location,
+    };
   }
+
+  // Get trusted contacts
+  const trustedContacts = await TrustedContact.find({
+    userId: user._id,
+    isActive: true,
+  })
+    .select("-__v")
+    .sort({ isPrimary: -1, createdAt: 1 })
+    .lean();
+
+  response.trustedContacts = trustedContacts.map((contact) => ({
+    id: contact._id,
+    name: contact.name,
+    email: contact.email,
+    phoneNumber: contact.phoneNumber,
+    relationship: contact.relationship,
+    isPrimary: contact.isPrimary,
+    isActive: contact.isActive,
+    createdAt: contact.createdAt,
+    updatedAt: contact.updatedAt,
+  }));
+
+  response.trustedContactsCount = trustedContacts.length;
+  response.maxContacts = config.maxTrustedContacts;
+  response.canAddMore = trustedContacts.length < config.maxTrustedContacts;
 
   return response;
 };
 
+/**
+ * Verify Google ID Token with support for multiple audiences
+ */
 const verifyGoogleIdToken = async (idToken) => {
-  const ticket = await googleClient.verifyIdToken({
-    idToken,
-    audience: config.googleClientId,
-  });
-  return ticket.getPayload();
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: idToken,
+      audience: config.googleClientId,
+    });
+    return ticket.getPayload();
+  } catch (primaryError) {
+    logger.warn("Primary Google audience verification failed:", {
+      message: primaryError.message,
+      expectedAudience: config.googleClientId,
+    });
+
+    // If we have multiple audiences, try each one
+    if (ALLOWED_GOOGLE_AUDIENCES.length > 1) {
+      for (const audience of ALLOWED_GOOGLE_AUDIENCES) {
+        if (audience === config.googleClientId) continue;
+
+        try {
+          const ticket = await googleClient.verifyIdToken({
+            idToken: idToken,
+            audience: audience,
+          });
+          logger.info(
+            `Google token verified with alternative audience: ${audience}`,
+          );
+          return ticket.getPayload();
+        } catch (error) {
+          logger.warn(`Google audience verification failed for ${audience}:`, {
+            message: error.message,
+          });
+        }
+      }
+    }
+
+    // If all fail, throw the primary error
+    throw primaryError;
+  }
 };
 
 const resolveGoogleUser = async (payload) => {
@@ -122,7 +206,32 @@ const googleAuth = async (idToken) => {
   try {
     payload = await verifyGoogleIdToken(idToken);
   } catch (error) {
-    logger.error("Google ID token verification failed:", error);
+    logger.error("Google ID token verification failed:", {
+      message: error.message,
+      clientId: config.googleClientId,
+      availableAudiences: ALLOWED_GOOGLE_AUDIENCES,
+    });
+
+    // Provide more specific error messages
+    if (error.message?.includes("audience")) {
+      return {
+        error: {
+          status: 401,
+          message:
+            "Google token audience mismatch. Please ensure the frontend is using the correct Google Client ID.",
+        },
+      };
+    }
+
+    if (error.message?.includes("expired")) {
+      return {
+        error: {
+          status: 401,
+          message: "Google token has expired. Please sign in again.",
+        },
+      };
+    }
+
     return {
       error: { status: 401, message: "Invalid or expired Google token." },
     };
@@ -196,7 +305,12 @@ const validateSignupInput = (email, password) => {
 };
 
 const resolveSignupAccount = async (email) => {
-  const existingByEmail = await User.findOne({ email });
+  // Soft-deleted accounts must not block re-signup with the same email —
+  // treat them the same as "no existing account".
+  const existingByEmail = await User.findOne({
+    email,
+    isDeleted: { $ne: true },
+  });
 
   if (!existingByEmail) {
     return { user: null };
@@ -224,26 +338,50 @@ const upsertSignupUser = async (existingUser, { email, name, password }) => {
     existingUser.password = hashedPassword;
     existingUser.lastPasswordChange = new Date();
     await existingUser.save();
-    return { user: existingUser, isNewUser: false };
+
+    // Fetch fresh copy to ensure all fields are loaded
+    const freshUser = await User.findById(existingUser._id);
+    if (!freshUser) {
+      throw new Error("Failed to reload user after update");
+    }
+    return { user: freshUser, isNewUser: false };
   }
 
-  const user = await User.create({
-    email,
-    name: name || "",
-    password: hashedPassword,
-    isVerified: false,
-  });
-  return { user, isNewUser: true };
+  // Create new user
+  try {
+    const user = await User.create({
+      email,
+      name: name || "",
+      password: hashedPassword,
+      isVerified: false,
+    });
+
+    //Verify the user was actually created
+    if (!user?._id) {
+      throw new Error("User creation failed - no _id returned");
+    }
+
+    // Fetch fresh copy to ensure all fields are loaded
+    const freshUser = await User.findById(user._id);
+    if (!freshUser) {
+      throw new Error("User not found immediately after creation");
+    }
+
+    logger.info("User created successfully", {
+      userId: freshUser._id,
+      email: freshUser.email,
+    });
+
+    return { user: freshUser, isNewUser: true };
+  } catch (error) {
+    logger.error("User creation error:", error);
+    throw error;
+  }
 };
 
 /**
  * Full signup flow: validate, create/refresh unverified user, send OTP.
- * Returns { error: { status, message } } or
- * { message, developmentOtp, user }.
- *
- * NOTE: `user.isVerified` will be `false` here — the controller is
- * responsible for issuing a session with `emailVerified: false` baked
- * into the token claims, since identity has not yet been proven via OTP.
+ * Welcome email is NOT sent here - it will be sent after OTP verification.
  */
 const signup = async ({ email, name, password }) => {
   const inputError = validateSignupInput(email, password);
@@ -260,28 +398,58 @@ const signup = async ({ email, name, password }) => {
     return { error: conflict };
   }
 
-  const { user, isNewUser } = await upsertSignupUser(existingUnverifiedUser, {
-    email,
-    name,
-    password,
-  });
-
-  const result = await emailService.sendOTP(email, "signup");
-
-  if (isNewUser) {
-    Promise.resolve(emailService.sendWelcomeEmail(user)).catch((err) => {
-      logger.error("Welcome email sending failed:", err);
+  try {
+    const { user } = await upsertSignupUser(existingUnverifiedUser, {
+      email,
+      name,
+      password,
     });
-  }
 
-  return {
-    message: result.message || "OTP sent successfully to your email",
-    developmentOtp:
-      config.isDevelopment && result.development_otp
-        ? result.development_otp
-        : undefined,
-    user,
-  };
+    if (!user?._id) {
+      logger.error("User creation failed - no _id returned", { email });
+      return {
+        error: {
+          status: 500,
+          message: "Failed to create user account. Please try again.",
+        },
+      };
+    }
+
+    const verifyUser = await User.findById(user._id);
+    if (!verifyUser) {
+      logger.error("User not found immediately after creation", {
+        userId: user._id,
+        email,
+      });
+      return {
+        error: {
+          status: 500,
+          message: "Account creation failed. Please try again.",
+        },
+      };
+    }
+
+    const result = await emailService.sendOTP(email, "signup");
+
+    // Welcome email will be sent after OTP verification
+
+    return {
+      message: result.message || "OTP sent successfully to your email",
+      developmentOtp:
+        config.isDevelopment && result.development_otp
+          ? result.development_otp
+          : undefined,
+      user: verifyUser,
+    };
+  } catch (error) {
+    logger.error("Signup error:", error);
+    return {
+      error: {
+        status: 500,
+        message: "Failed to create account. Please try again.",
+      },
+    };
+  }
 };
 
 /**
@@ -326,14 +494,39 @@ const login = async (email, password) => {
 
 /**
  * Verify a signup/login OTP and mark the user as logged in.
+ * Sends welcome email after successful verification.
  */
 const verifyOtp = async (email, otpCode) => {
+  const user = await User.findOne({ email });
+  if (!user) {
+    logger.error("User not found during OTP verification", { email });
+    throw new Error("User not found");
+  }
+
   const result = await emailService.verifyOTP(email, otpCode);
 
+  if (!result.user) {
+    logger.error("OTP verification returned no user", { email });
+    throw new Error("OTP verification failed. Please try again.");
+  }
+
+  // Update last login
   result.user.lastLogin = new Date();
   await result.user.save();
 
-  return { user: result.user };
+  const freshUser = await User.findById(result.user._id);
+  if (!freshUser) {
+    logger.error("User disappeared after OTP verification", { email });
+    throw new Error("Account verification failed. Please try again.");
+  }
+
+  if (freshUser.isVerified) {
+    Promise.resolve(emailService.sendWelcomeEmail(freshUser)).catch((err) => {
+      logger.error("Welcome email sending failed:", err);
+    });
+  }
+
+  return { user: freshUser };
 };
 
 /**
@@ -605,10 +798,7 @@ const changePassword = async (userId, currentPassword, newPassword) => {
   return { success: true };
 };
 
-/* ------------------------------------------------------------------ */
-/* Onboarding step machine                                             */
-/* ------------------------------------------------------------------ */
-
+// Onboarding step
 const validateStep = (step) => STEP_ORDER.includes(step);
 
 const buildNavigationResponse = (targetIndex, isComplete) => {
@@ -621,48 +811,45 @@ const buildNavigationResponse = (targetIndex, isComplete) => {
   return { canGoBack, canGoForward, previousStep, nextStep };
 };
 
-const processUniversityData = async (data, userId) => {
-  const updateData = {};
+/**
+ * Build the university subdocument straight from onboarding input.
+ *
+ * UNIFORM NAMING CONVENTION:
+ * - The frontend MUST send: { name, acronym, location }
+ * - These are the ONLY field names accepted for university data
+ *
+ * The `selectedUniversity` field is an INTERNAL field only - it should
+ * never be sent by the frontend directly.
+ */
+const processUniversityData = (data) => {
+  const name = data.name;
+  const acronym = data.acronym;
+  const location = data.location;
 
-  if (!data.universityId) {
-    if (data.selectedUniversity) {
-      updateData.selectedUniversity = data.selectedUniversity;
-    }
-    return updateData;
+  // If both name and acronym are provided, save the complete university
+  if (name && acronym) {
+    return {
+      university: {
+        name: name.trim(),
+        acronym: acronym.trim().toUpperCase(),
+        location: location ? location.trim() : "",
+      },
+      selectedUniversity: name.trim(),
+    };
   }
 
-  let University;
-  if (mongoose.models.University) {
-    University = mongoose.models.University;
-  } else {
-    if (data.universityId) {
-      updateData.universityId = data.universityId;
-    }
-    if (data.selectedUniversity) {
-      updateData.selectedUniversity = data.selectedUniversity;
-    }
-    return updateData;
+  if (name && !acronym) {
+    return {
+      selectedUniversity: name.trim(),
+    };
   }
 
-  try {
-    const university = await University.findById(data.universityId);
-    if (university) {
-      updateData.universityId = data.universityId;
-      updateData.selectedUniversity = university.name;
-    } else if (data.selectedUniversity) {
-      updateData.selectedUniversity = data.selectedUniversity;
-    }
-  } catch (error) {
-    logger.error(
-      `Failed to resolve university ${data.universityId} for user ${userId}:`,
-      error,
-    );
-    if (data.selectedUniversity) {
-      updateData.selectedUniversity = data.selectedUniversity;
-    }
+  // If only acronym is provided without name - REJECT (should be caught by validator)
+  if (acronym && !name) {
+    logger.warn(`Acronym ${acronym} provided without a name during onboarding`);
+    return {};
   }
-
-  return updateData;
+  return {};
 };
 
 const validateCompletionPrerequisites = async (userId, targetIndex) => {
@@ -696,10 +883,20 @@ const handleOnboardingComplete = async (user) => {
 
     logger.info(`User ${user._id} completed onboarding and is now verified`);
 
+    // Send onboarding complete email
     if (emailService.sendOnboardingCompleteEmail) {
       Promise.resolve(emailService.sendOnboardingCompleteEmail(user)).catch(
         (err) => {
           logger.error("Onboarding completion email failed:", err);
+        },
+      );
+    }
+
+    // Send profile completion email (the user's profile is now complete)
+    if (emailService.sendProfileCompletionEmail) {
+      Promise.resolve(emailService.sendProfileCompletionEmail(user)).catch(
+        (err) => {
+          logger.error("Profile completion email failed:", err);
         },
       );
     }
@@ -737,7 +934,7 @@ const resolveStepNavigation = (user, step) => {
 
 const logMissingOptionalData = (user, userId) => {
   const hasLocationData = user.preferences?.onboardingLocation;
-  const hasUniversityData = user.universityId || user.selectedUniversity;
+  const hasUniversityData = user.university?.acronym || user.selectedUniversity;
 
   if (!hasLocationData && user.onboardingStep !== "complete") {
     logger.info(`User ${userId} completing onboarding without location data`);
@@ -776,7 +973,7 @@ const buildStepUpdateData = async (step, data, user, userId) => {
   updateData.onboardingStep = step;
 
   if (step === "university") {
-    const universityData = await processUniversityData(data, userId);
+    const universityData = processUniversityData(data);
     Object.assign(updateData, universityData);
   }
 
@@ -1056,7 +1253,7 @@ const getOnboardingStatus = async (userId) => {
     previousStep: canGoBack ? STEP_ORDER[currentIndex - 1] : null,
     contactsCount: contactCount,
     maxContacts: config.maxTrustedContacts,
-    user: buildUserResponse(user),
+    user: await buildUserResponse(user),
   };
 };
 
@@ -1064,21 +1261,187 @@ const getOnboardingStatus = async (userId) => {
  * Fetch the authenticated user's profile (used by GET /me).
  */
 const getMe = async (userId) => {
-  const user = await User.findById(userId).select("-__v");
+  const user = await User.findById(userId).select("-__v -password");
 
   if (!user) {
     return null;
   }
-  const contactCount = await TrustedContact.countDocuments({
+
+  // Check if account is soft-deleted
+  if (user.isDeleted || !user.isActive) {
+    return null;
+  }
+
+  // Get trusted contacts
+  const trustedContacts = await TrustedContact.find({
     userId,
     isActive: true,
-  });
+  })
+    .select("-__v")
+    .sort({ isPrimary: -1, createdAt: 1 })
+    .lean();
+
+  const userObject = user.toJSON();
 
   return {
-    ...user.toJSON(),
-    trustedContactsCount: contactCount,
+    ...userObject,
+    trustedContacts: trustedContacts.map((contact) => ({
+      id: contact._id,
+      name: contact.name,
+      email: contact.email,
+      phoneNumber: contact.phoneNumber,
+      relationship: contact.relationship,
+      isPrimary: contact.isPrimary,
+      isActive: contact.isActive,
+      createdAt: contact.createdAt,
+      updatedAt: contact.updatedAt,
+    })),
+    trustedContactsCount: trustedContacts.length,
     maxContacts: config.maxTrustedContacts,
+    canAddMore: trustedContacts.length < config.maxTrustedContacts,
   };
+};
+
+/**
+ * Verify user password for account deletion
+ */
+const verifyDeletionPassword = async (user, password) => {
+  // Check if user is already soft-deleted
+  if (user.isDeleted) {
+    return {
+      valid: false,
+      error: {
+        status: 400,
+        message: "Account is already deleted.",
+      },
+    };
+  }
+
+  // If user HAS a password, verify it
+  if (user.password) {
+    if (!password) {
+      return {
+        valid: false,
+        error: {
+          status: 400,
+          message: "Current password is required to delete your account.",
+        },
+      };
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return {
+        valid: false,
+        error: {
+          status: 401,
+          message: "Invalid password. Please try again.",
+        },
+      };
+    }
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Execute account deletion with or without transaction
+ */
+const executeDeletion = async (userId, useTransaction) => {
+  const userIdStr = userId.toString();
+  let session;
+
+  try {
+    if (useTransaction) {
+      session = await mongoose.startSession();
+      session.startTransaction();
+    }
+
+    const deleteOptions = useTransaction ? { session } : {};
+
+    // Hard delete associated data
+    await TrustedContact.deleteMany({ userId: userIdStr }, deleteOptions);
+    await SOSAlert.deleteMany({ userId: userIdStr }, deleteOptions);
+    await RefreshToken.deleteMany({ userId: userIdStr }, deleteOptions);
+    await OTP.deleteMany({ userId: userIdStr }, deleteOptions);
+    await EmergencyDirectory.deleteMany({ userId: userIdStr }, deleteOptions);
+    await CampusSecurity.deleteMany({ userId: userIdStr }, deleteOptions);
+
+    const updateData = {
+      isDeleted: true,
+      isActive: false,
+      deletedAt: new Date(),
+      deletionReason: "user_requested",
+    };
+
+    await User.findByIdAndUpdate(userId, { $set: updateData }, deleteOptions);
+
+    if (useTransaction) {
+      await session.commitTransaction();
+    }
+
+    return { success: true };
+  } catch (error) {
+    if (useTransaction && session) {
+      await session.abortTransaction();
+    }
+    throw error;
+  } finally {
+    if (useTransaction && session) {
+      await session.endSession();
+    }
+  }
+};
+
+/**
+ * Delete user account and all associated data
+ */
+const deleteAccount = async (userId, password, reason = "user_requested") => {
+  try {
+    const user = await User.findById(userId).select("+password");
+    if (!user) {
+      return {
+        error: {
+          status: 404,
+          message: "User not found",
+        },
+      };
+    }
+
+    // Check if already soft-deleted
+    if (user.isDeleted) {
+      return {
+        error: {
+          status: 400,
+          message: "Account is already deleted.",
+        },
+      };
+    }
+
+    // Verify password if user has one
+    const passwordCheck = await verifyDeletionPassword(user, password);
+    if (!passwordCheck.valid) {
+      return { error: passwordCheck.error };
+    }
+
+    const useTransaction = process.env.NODE_ENV !== "test";
+    await executeDeletion(userId, useTransaction);
+
+    logger.info(`Account deleted for user ${userId}`, {
+      userId: userId.toString(),
+      reason,
+      environment: process.env.NODE_ENV,
+      transactionUsed: useTransaction,
+    });
+
+    return {
+      message:
+        "Your account has been successfully deleted. All your data has been removed.",
+    };
+  } catch (error) {
+    logger.error("Account deletion error:", error);
+    throw error;
+  }
 };
 
 export default {
@@ -1099,4 +1462,5 @@ export default {
   updateOnboardingStep,
   getOnboardingStatus,
   getMe,
+  deleteAccount,
 };

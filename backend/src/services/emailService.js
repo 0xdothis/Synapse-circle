@@ -110,16 +110,33 @@ class EmailService {
   async verifyOTP(email, otpCode) {
     try {
       const user = await User.findOne({ email });
-      if (!user) throw new Error("User not found");
+      if (!user) {
+        logger.error("User not found during OTP verification", { email });
+        throw new Error("User not found. Please sign up first.");
+      }
 
+      // Then verify OTP
       const otp = await OTP.findOne({
         email,
         otpCode,
         isUsed: false,
         expiresAt: { $gt: new Date() },
       });
-      if (!otp) throw new Error("Invalid or expired OTP");
 
+      if (!otp) {
+        // Check if OTP exists but expired
+        const expiredOTP = await OTP.findOne({
+          email,
+          otpCode,
+          isUsed: false,
+        });
+        if (expiredOTP && expiredOTP.expiresAt <= new Date()) {
+          throw new Error("OTP has expired. Please request a new one.");
+        }
+        throw new Error("Invalid or expired OTP");
+      }
+
+      // Mark OTP as used
       otp.isUsed = true;
       await otp.save();
 
@@ -127,7 +144,16 @@ class EmailService {
       user.lastLogin = new Date();
       await user.save();
 
-      return { success: true, user, message: "OTP verified successfully" };
+      const freshUser = await User.findById(user._id);
+      if (!freshUser) {
+        throw new Error("User not found after verification");
+      }
+
+      return {
+        success: true,
+        user: freshUser,
+        message: "OTP verified successfully",
+      };
     } catch (error) {
       logger.error("OTP verification error:", error);
       throw error;
@@ -343,7 +369,6 @@ class EmailService {
     }
   }
 
-  // SOS alerts
   /**
    * Picks the right template for the alert's lifecycle state and builds
    * {subject, html, text}. Centralizing this means sendSOSAlert and
@@ -470,6 +495,119 @@ class EmailService {
     } catch (error) {
       logger.error("Bulk alert email send error:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Send account deletion confirmation email
+   */
+  async sendAccountDeletionEmail(user) {
+    try {
+      if (this._isEmailSendingDisabled()) {
+        console.log(`📧 [TEST] Account deletion email to ${user.email}`);
+        return {
+          success: true,
+          message: "Account deletion email sent (test mode)",
+        };
+      }
+
+      const subject = "Your SafeWalk Campus Account Has Been Deleted";
+
+      const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
+        <div style="text-align: center; padding: 20px 0;">
+          <h1 style="color: #dc3545; margin: 0;">Account Deleted</h1>
+        </div>
+        
+        <div style="background-color: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            Hello <strong>${user.name || user.email}</strong>,
+          </p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            We're writing to confirm that your SafeWalk Campus account has been <strong style="color: #dc3545;">permanently deleted</strong> as per your request.
+          </p>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
+            <p style="margin: 0; font-size: 14px; color: #555;">
+              <strong>What was deleted:</strong>
+            </p>
+            <ul style="margin: 10px 0 0 20px; color: #555; font-size: 14px;">
+              <li>Your profile information and settings</li>
+              <li>All trusted contacts</li>
+              <li>All SOS alert history</li>
+              <li>All saved locations</li>
+              <li>All authentication tokens</li>
+            </ul>
+          </div>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6;">
+            This action cannot be undone. If you change your mind, you'll need to create a new account.
+          </p>
+          
+          <p style="font-size: 16px; color: #333; line-height: 1.6; margin-top: 20px;">
+            We're sorry to see you go. If you have any feedback on how we can improve, please don't hesitate to reach out.
+          </p>
+          
+          <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 20px 0;">
+          
+          <p style="font-size: 14px; color: #888; text-align: center; margin: 0;">
+            This email was sent to confirm the deletion of your SafeWalk Campus account.
+          </p>
+        </div>
+        
+        <div style="text-align: center; padding: 20px 0; font-size: 12px; color: #999;">
+          <p style="margin: 5px 0;">© SafeWalk Campus - Your Safety, Our Priority</p>
+        </div>
+      </div>
+    `;
+
+      const text = `
+      Account Deleted - SafeWalk Campus
+
+      Hello ${user.name || user.email},
+
+      We're writing to confirm that your SafeWalk Campus account has been permanently deleted as per your request.
+
+      What was deleted:
+      - Your profile information and settings
+      - All trusted contacts
+      - All SOS alert history
+      - All saved locations
+      - All authentication tokens
+
+      This action cannot be undone. If you change your mind, you'll need to create a new account.
+
+      We're sorry to see you go. If you have any feedback on how we can improve, please don't hesitate to reach out.
+
+      © SafeWalk Campus - Your Safety, Our Priority
+    `;
+
+      const result = await this._send({
+        to: {
+          email: user.email.split("_deleted_")[0],
+          name: user.name || user.email,
+        },
+        subject,
+        html,
+        text,
+      });
+
+      logger.info(
+        `Account deletion email sent to ${user.email}: ${result.messageId}`,
+      );
+      return {
+        success: true,
+        messageId: result.messageId,
+        message: "Account deletion email sent successfully",
+      };
+    } catch (error) {
+      logger.error("Account deletion email send error:", error);
+      return {
+        success: false,
+        message: "Failed to send account deletion email",
+        error: error.message,
+      };
     }
   }
 

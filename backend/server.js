@@ -1,5 +1,7 @@
 import "dotenv/config";
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
@@ -10,12 +12,16 @@ import mongoSanitize from "express-mongo-sanitize";
 import { swaggerSpec } from "./src/config/swagger.js";
 import authRoutes from "./src/routes/auth.routes.js";
 import contactRoutes from "./src/routes/contacts.routes.js";
+import universityRoutes from "./src/routes/university.routes.js";
 import emergencyRoutes from "./src/routes/emergency.routes.js";
 import sosRoutes from "./src/routes/sos.routes.js";
 import profileRoutes from "./src/routes/profile.routes.js";
 import { errorHandler } from "./src/middlewares/errorHandler.js";
 import { globalLimiter } from "./src/middlewares/rateLimiter.js";
 import { logger } from "./src/utils/logger.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -41,7 +47,6 @@ const connectDB = async () => {
 };
 
 // CORS Configuration
-// No cookies are used anymore (pure bearer-token auth), so `credentials` is no longer required
 const allowedOrigins = [
   "https://synapse-circle-tau.vercel.app",
   "https://synap-circle.onrender.com",
@@ -92,6 +97,12 @@ app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(mongoSanitize());
+app.use(
+  "/assets",
+  express.static(path.join(__dirname, "public/assets"), {
+    maxAge: "7d",
+  }),
+);
 
 // Debug Middleware
 app.use((req, res, next) => {
@@ -192,6 +203,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/contacts", contactRoutes);
+app.use("/api/university", universityRoutes);
 app.use("/api/emergency", emergencyRoutes);
 app.use("/api/sos", sosRoutes);
 

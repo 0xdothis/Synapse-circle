@@ -85,7 +85,7 @@ describe("Profile API Tests", () => {
       expect(profile).toHaveProperty("email", testUser.email);
       expect(profile).toHaveProperty("profilePicture");
       expect(profile).toHaveProperty("university");
-      expect(profile).toHaveProperty("universityId");
+      expect(profile).toHaveProperty("universityAcronym");
       expect(profile).toHaveProperty("isVerified", true);
       expect(profile).toHaveProperty("isActive", true);
 
