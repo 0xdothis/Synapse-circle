@@ -25,6 +25,13 @@ describe("Onboarding API Tests", () => {
 
   beforeEach(() => {
     clearAuthCache();
+    // Clean up contacts before each test to ensure clean state
+    TrustedContact.deleteMany({ userId }).catch(() => {});
+  });
+
+  afterEach(async () => {
+    // Clean up after each test
+    await TrustedContact.deleteMany({ userId }).catch(() => {});
   });
 
   describe("GET /api/auth/onboarding-status", () => {
@@ -282,23 +289,49 @@ describe("Onboarding API Tests", () => {
       expect(response.body.contacts).toHaveProperty("maxContacts", 3);
     });
 
+    /**
+     * University data test - fixed to handle response structure
+     */
     it("should process university data correctly", async () => {
       await User.findByIdAndUpdate(userId, { onboardingStep: "welcome" });
+      await TrustedContact.deleteMany({ userId });
 
-      await request(app)
+      // Move to location
+      const locationRes = await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Authorization", `Bearer ${authData.accessToken}`)
         .send({ step: "location" })
         .expect(200);
 
-      await request(app)
+      expect(locationRes.body).toHaveProperty("step", "location");
+
+      // Move to contacts WITH a contact
+      const contactData = {
+        name: "Test University Contact",
+        email: "universitytest@example.com",
+        relationship: "friend",
+      };
+
+      const contactsResponse = await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Authorization", `Bearer ${authData.accessToken}`)
-        .send({ step: "contacts" })
+        .send({
+          step: "contacts",
+          data: {
+            contacts: [contactData],
+          },
+        })
         .expect(200);
 
-      const universityId = "507f1f77bcf86cd799439011";
+      // Verify contact was added
+      expect(contactsResponse.body).toHaveProperty("success", true);
+      expect(contactsResponse.body).toHaveProperty("step", "contacts");
+      expect(contactsResponse.body).toHaveProperty("contactsAdded");
+      expect(contactsResponse.body.contactsAdded).toBeGreaterThan(0);
+
+      // Move to university with data
       const universityName = "Test University";
+      const universityAcronym = "TU";
 
       const response = await request(app)
         .patch("/api/auth/onboarding-step")
@@ -306,32 +339,36 @@ describe("Onboarding API Tests", () => {
         .send({
           step: "university",
           data: {
-            universityId: universityId,
-            selectedUniversity: universityName,
+            name: universityName,
+            acronym: universityAcronym,
+            location: "Test City, Test Country",
           },
         })
         .expect(200);
 
       expect(response.body).toHaveProperty("success", true);
       expect(response.body).toHaveProperty("step", "university");
-      if (response.body.user.universityId) {
-        expect(response.body.user).toHaveProperty("universityId", universityId);
-      }
-      expect(response.body.user).toHaveProperty(
-        "selectedUniversity",
-        universityName,
-      );
-
       const user = await User.findById(userId);
-      if (user.universityId) {
-        expect(user.universityId.toString()).toBe(universityId);
-      }
+      expect(user.university.name).toBe(universityName);
+      expect(user.university.acronym).toBe(universityAcronym.toUpperCase());
       expect(user.selectedUniversity).toBe(universityName);
     });
 
+    /**
+     * Location data test - move to location step first, then send data
+     */
     it("should process location data correctly", async () => {
+      // Reset to welcome step
       await User.findByIdAndUpdate(userId, { onboardingStep: "welcome" });
 
+      // First move to location step
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({ step: "location" })
+        .expect(200);
+
+      // Now send location data
       const locationData = {
         latitude: 37.7749,
         longitude: -122.4194,
@@ -417,7 +454,7 @@ describe("Onboarding API Tests", () => {
 
     it("should return contact count when on contacts step", async () => {
       await User.findByIdAndUpdate(userId, { onboardingStep: "welcome" });
-      await TrustedContact.deleteMany({ userId: userId });
+      await TrustedContact.deleteMany({ userId });
 
       await request(app)
         .patch("/api/auth/onboarding-step")
@@ -452,7 +489,27 @@ describe("Onboarding API Tests", () => {
         .expect(200);
     });
 
+    /**
+     * FIXED: Invalid data type test - data.isObject() runs first
+     */
     it("should handle data validation for invalid data type", async () => {
+      // Reset to welcome step
+      await User.findByIdAndUpdate(userId, { onboardingStep: "welcome" });
+
+      // Move to contacts step first
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({ step: "location" })
+        .expect(200);
+
+      await request(app)
+        .patch("/api/auth/onboarding-step")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({ step: "contacts" })
+        .expect(200);
+
+      // Now try to move to university with a string as data
       const response = await request(app)
         .patch("/api/auth/onboarding-step")
         .set("Authorization", `Bearer ${authData.accessToken}`)
@@ -463,6 +520,7 @@ describe("Onboarding API Tests", () => {
         .expect(400);
 
       expect(response.body).toHaveProperty("success", false);
+      // The data.isObject() validator runs first
       expect(response.body).toHaveProperty(
         "message",
         expect.stringContaining("Data must be an object"),

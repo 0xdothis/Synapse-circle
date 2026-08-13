@@ -75,7 +75,10 @@ const listContacts = async (userId) => {
  * Create a new trusted contact for a user.
  * Returns { conflict, maxReached, contact } — callers check which case applies.
  */
-const addContact = async (userId, { name, email, relationship }) => {
+const addContact = async (
+  userId,
+  { name, email, relationship, phoneNumber },
+) => {
   const normalizedEmail = email.toLowerCase().trim();
 
   const existingContact = await TrustedContact.findOne({
@@ -102,6 +105,7 @@ const addContact = async (userId, { name, email, relationship }) => {
     userId,
     name: name.trim(),
     email: normalizedEmail,
+    phoneNumber: phoneNumber?.trim() || null,
     relationship,
     isPrimary,
   });
@@ -110,6 +114,7 @@ const addContact = async (userId, { name, email, relationship }) => {
     contactId: contact._id,
     name: contact.name,
     email: contact.email,
+    phoneNumber: contact.phoneNumber,
   });
 
   return { contact };
@@ -122,7 +127,7 @@ const addContact = async (userId, { name, email, relationship }) => {
 const editContact = async (
   userId,
   contactId,
-  { name, email, relationship, isPrimary },
+  { name, email, relationship, phoneNumber, isPrimary },
 ) => {
   const contact = await findActiveContact(userId, contactId);
 
@@ -146,6 +151,8 @@ const editContact = async (
   if (name) contact.name = name.trim();
   if (email) contact.email = email.toLowerCase().trim();
   if (relationship) contact.relationship = relationship;
+  if (phoneNumber !== undefined)
+    contact.phoneNumber = phoneNumber?.trim() || null;
 
   await syncPrimaryContactAfterUpdate(userId, contactId, contact, isPrimary);
 

@@ -39,10 +39,10 @@ class SOSService {
       });
 
       let securityContacts = [];
-      if (user.universityId) {
+      if (user.university?.acronym) {
         securityContacts = await CampusSecurity.find({
           isActive: true,
-          universityId: user.universityId,
+          universityAcronym: user.university.acronym,
         });
       } else {
         securityContacts = await CampusSecurity.find({
@@ -326,9 +326,6 @@ class SOSService {
 
       const total = await SOSAlert.countDocuments(query);
 
-      // One aggregation covering every alert on this page, instead of a
-      // per-alert query, to get recipient/delivery counts from
-      // AlertRecipient (the only place that data lives now).
       const alertIds = alerts.map((alert) => alert._id);
       const recipientStats = await AlertRecipient.aggregate([
         { $match: { alertId: { $in: alertIds } } },

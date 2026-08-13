@@ -41,11 +41,12 @@ const getFullProfile = async (userId) => {
     ]);
 
   const safetySetup = {
-    institutionSelected: !!user.selectedUniversity || !!user.universityId,
+    institutionSelected:
+      !!user.selectedUniversity || !!user.university?.acronym,
     trustedContactsAdded: trustedContacts.length > 0,
     locationPermissionEnabled: !!user.preferences?.onboardingLocation,
     isComplete:
-      (!!user.selectedUniversity || !!user.universityId) &&
+      (!!user.selectedUniversity || !!user.university?.acronym) &&
       trustedContacts.length > 0 &&
       !!user.preferences?.onboardingLocation,
   };
@@ -55,8 +56,8 @@ const getFullProfile = async (userId) => {
     name: user.name || "",
     email: user.email,
     profilePicture: user.profilePicture || null,
-    university: user.selectedUniversity || "",
-    universityId: user.universityId || null,
+    university: user.selectedUniversity || user.university?.name || "",
+    universityAcronym: user.university?.acronym || null,
     isVerified: user.isVerified,
     isActive: user.isActive,
     preferences: user.preferences || {
@@ -168,7 +169,14 @@ const removeProfilePicture = async (userId) => {
  */
 const updateProfile = async (
   userId,
-  { name, email, university, universityId, preferences },
+  {
+    name,
+    email,
+    university,
+    universityAcronym,
+    universityLocation,
+    preferences,
+  },
 ) => {
   const currentUser = await User.findById(userId);
   if (!currentUser) {
@@ -188,9 +196,31 @@ const updateProfile = async (
   const updateData = {};
   if (name !== undefined) updateData.name = name.trim();
   if (email !== undefined) updateData.email = email.toLowerCase().trim();
-  if (university !== undefined)
-    updateData.selectedUniversity = university.trim();
-  if (universityId !== undefined) updateData.universityId = universityId;
+
+  // Update university information if any of the university fields are provided
+  if (university !== undefined || universityAcronym !== undefined) {
+    const currentUniversity = currentUser.university || {};
+
+    updateData.university = {
+      name:
+        university !== undefined
+          ? university.trim()
+          : currentUniversity.name || "",
+      acronym:
+        universityAcronym !== undefined
+          ? universityAcronym.trim().toUpperCase()
+          : currentUniversity.acronym || "",
+      location:
+        universityLocation !== undefined
+          ? universityLocation.trim()
+          : currentUniversity.location || "",
+    };
+
+    // Also update selectedUniversity for backward compatibility
+    if (university !== undefined) {
+      updateData.selectedUniversity = university.trim();
+    }
+  }
 
   if (preferences) {
     updateData.preferences = {
@@ -209,8 +239,9 @@ const updateProfile = async (
     fields: Object.keys(updateData),
   });
 
+  // Check if onboarding is complete - using university.acronym instead of universityId
   const isComplete =
-    (updatedUser.selectedUniversity || updatedUser.universityId) &&
+    (updatedUser.selectedUniversity || updatedUser.university?.acronym) &&
     (await TrustedContact.countDocuments({
       userId: updatedUser._id,
       isActive: true,
@@ -235,7 +266,8 @@ const updateProfile = async (
       email: updatedUser.email,
       profilePicture: updatedUser.profilePicture,
       university: updatedUser.selectedUniversity,
-      universityId: updatedUser.universityId,
+      universityAcronym: updatedUser.university?.acronym || null,
+      universityLocation: updatedUser.university?.location || null,
       isVerified: updatedUser.isVerified,
       preferences: updatedUser.preferences,
       onboardingStep: updatedUser.onboardingStep,

@@ -60,20 +60,47 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletionReason: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     lastLogin: {
       type: Date,
     },
     deviceInfo: {
       type: String,
     },
-    universityId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "University",
-      index: true,
+    university: {
+      type: {
+        name: {
+          type: String,
+          trim: true,
+        },
+        acronym: {
+          type: String,
+          trim: true,
+          uppercase: true,
+        },
+        location: {
+          type: String,
+          trim: true,
+        },
+      },
+      default: null,
     },
     selectedUniversity: {
       type: String,
       trim: true,
+      default: null,
     },
     onboardingStep: {
       type: String,
@@ -117,6 +144,7 @@ const userSchema = new mongoose.Schema(
 // Indexes
 userSchema.index({ email: 1 });
 userSchema.index({ createdAt: -1 });
+userSchema.index({ isDeleted: 1 });
 
 // Method to get safe user data
 userSchema.methods.toJSON = function () {
@@ -127,18 +155,16 @@ userSchema.methods.toJSON = function () {
 };
 
 userSchema.methods.getSecurityContacts = async function () {
-  if (!this.universityId) {
-    const CampusSecurity = mongoose.model("CampusSecurity");
-    return await CampusSecurity.find({ isActive: true });
+  const CampusSecurity = mongoose.model("CampusSecurity");
+
+  if (this.university?.acronym) {
+    return await CampusSecurity.find({
+      universityAcronym: this.university.acronym,
+      isActive: true,
+    });
   }
 
-  const University = mongoose.model("University");
-  const university = await University.findById(this.universityId);
-  if (!university) {
-    return [];
-  }
-
-  return await university.getAllSecurityContacts();
+  return await CampusSecurity.find({ isActive: true });
 };
 
 userSchema.methods.canResetPassword = function () {
@@ -154,6 +180,10 @@ userSchema.methods.canResetPassword = function () {
     return false;
   }
   return true;
+};
+
+userSchema.methods.isDeletedAccount = function () {
+  return this.isDeleted === true;
 };
 
 export default mongoose.model("User", userSchema);

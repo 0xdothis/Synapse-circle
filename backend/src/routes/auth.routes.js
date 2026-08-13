@@ -17,6 +17,108 @@ const { STEP_ORDER } = authService;
 const router = express.Router();
 
 /**
+ * Ensures that when moving to the university step, at least a name OR acronym is provided
+ * Only run if data is an object
+ */
+const universityStepValidator = body("data").custom((data, { req }) => {
+  if (req.body.step !== "university") {
+    return true;
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return true;
+  }
+
+  const name = data.name;
+  const acronym = data.acronym;
+
+  if (!name && !acronym) {
+    throw new Error(
+      "University name or acronym is required when moving to the university step.",
+    );
+  }
+
+  return true;
+});
+
+/**
+ * Ensures a university acronym is never saved without a name to pair
+ * it with — the reverse case (name only, no acronym yet) IS allowed,
+ * since the university step is deferrable: a user can pick a name now
+ * and have the acronym filled in later, either on a subsequent
+ * onboarding call or via PUT /api/university.
+ * Only run if data is an object
+ */
+const universityPairingValidator = body("data").custom((data, { req }) => {
+  if (req.body.step !== "university") {
+    return true;
+  }
+
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return true;
+  }
+
+  const name = data.name;
+  const acronym = data.acronym;
+
+  if (acronym && !name) {
+    throw new Error(
+      "A university acronym was provided without a name. Please send both together.",
+    );
+  }
+
+  return true;
+});
+
+/**
+ * Location validator that only validates for the "location" step
+ * Accepts an object with latitude and longitude
+ */
+const locationValidator = body("data.location")
+  .optional()
+  .custom((location, { req }) => {
+    if (req.body.step !== "location") {
+      return true;
+    }
+
+    if (location === null || location === undefined) {
+      return true;
+    }
+    if (typeof location !== "object" || Array.isArray(location)) {
+      throw new TypeError("Location must be an object");
+    }
+
+    if (location.latitude !== undefined || location.longitude !== undefined) {
+      if (location.latitude === undefined || location.longitude === undefined) {
+        throw new Error("Both latitude and longitude are required together");
+      }
+
+      // Validate latitude
+      if (
+        typeof location.latitude !== "number" ||
+        Number.isNaN(location.latitude)
+      ) {
+        throw new TypeError("Latitude must be a valid number");
+      }
+      if (location.latitude < -90 || location.latitude > 90) {
+        throw new Error("Latitude must be between -90 and 90");
+      }
+
+      // Validate longitude
+      if (
+        typeof location.longitude !== "number" ||
+        Number.isNaN(location.longitude)
+      ) {
+        throw new TypeError("Longitude must be a valid number");
+      }
+      if (location.longitude < -180 || location.longitude > 180) {
+        throw new Error("Longitude must be between -180 and 180");
+      }
+    }
+
+    return true;
+  });
+
+/**
  * @swagger
  * /api/auth/signup:
  *   post:
@@ -379,7 +481,41 @@ router.post("/logout", authenticate, asyncHandler(authController.logout));
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/OnboardingStepRequest'
+ *             type: object
+ *             required:
+ *               - step
+ *             properties:
+ *               step:
+ *                 type: string
+ *                 enum: [welcome, location, contacts, university, complete]
+ *               data:
+ *                 type: object
+ *                 properties:
+ *                   location:
+ *                     type: object
+ *                     properties:
+ *                       latitude:
+ *                         type: number
+ *                       longitude:
+ *                         type: number
+ *                   name:
+ *                     type: string
+ *                     description: University name (for university step)
+ *                   acronym:
+ *                     type: string
+ *                     description: University acronym (for university step)
+ *                   contacts:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         name:
+ *                           type: string
+ *                         email:
+ *                           type: string
+ *                         relationship:
+ *                           type: string
+ *                           enum: [parent, sibling, friend, roommate, partner, other]
  *     responses:
  *       200:
  *         description: Onboarding step updated successfully
@@ -388,7 +524,7 @@ router.post("/logout", authenticate, asyncHandler(authController.logout));
  *             schema:
  *               $ref: '#/components/schemas/OnboardingStepResponse'
  *       400:
- *         description: Invalid step, out-of-order navigation, or missing prerequisites (e.g. no trusted contacts before completion)
+ *         description: Invalid step, out-of-order navigation, missing prerequisites (e.g. no trusted contacts before completion), or a university acronym sent without a name
  *         content:
  *           application/json:
  *             schema:
@@ -419,19 +555,37 @@ router.patch(
       .optional()
       .isObject()
       .withMessage("Data must be an object if provided"),
+    body("data.name")
+      .optional()
+      .isString()
+      .withMessage("University name must be a string")
+      .isLength({ max: 100 })
+      .withMessage("University name cannot exceed 100 characters")
+      .trim(),
+    body("data.acronym")
+      .optional()
+      .isString()
+      .withMessage("University acronym must be a string")
+      .isLength({ min: 2, max: 10 })
+      .withMessage("Acronym must be between 2 and 10 characters")
+      .matches(/^[A-Za-z0-9]+$/)
+      .withMessage("Acronym can only contain letters and numbers")
+      .trim()
+      .toUpperCase(),
+    locationValidator,
     body("data.contacts")
       .optional()
-      .isArray()
-      .withMessage("Contacts must be an array")
-      .custom((contacts) => {
-        if (!contacts || contacts.length === 0) {
+      .custom((contacts, { req }) => {
+        if (req.body.step !== "contacts") return true;
+        if (!Array.isArray(contacts))
+          throw new Error("Contacts must be an array");
+        if (contacts.length === 0)
           throw new Error("At least one contact is required");
-        }
-        contacts.forEach((contact, index) => {
-          validateContact(contact, index);
-        });
+        contacts.forEach((contact, index) => validateContact(contact, index));
         return true;
       }),
+    universityStepValidator,
+    universityPairingValidator,
   ]),
   authController.updateOnboardingStep,
 );
@@ -790,6 +944,88 @@ router.post(
       .withMessage("Passwords do not match"),
   ]),
   authController.changePassword,
+);
+
+/**
+ * @swagger
+ * /api/auth/account:
+ *   delete:
+ *     summary: Delete user account
+ *     description: Permanently deletes the user's account and all associated data. Requires password confirmation for local auth users.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: Current password (required for local auth users)
+ *                 example: "SecurePass123"
+ *               reason:
+ *                 type: string
+ *                 enum: [user_requested, inactive, violation, other]
+ *                 default: user_requested
+ *                 description: Reason for account deletion
+ *               confirm:
+ *                 type: boolean
+ *                 description: For Google auth users - set to true to confirm deletion
+ *                 example: true
+ *     responses:
+ *       200:
+ *         description: Account deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Your account has been successfully deleted. All your data has been removed."
+ *       400:
+ *         description: Missing password or confirmation
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Invalid password
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.delete(
+  "/account",
+  authenticate,
+  validate([
+    body("password")
+      .optional()
+      .isString()
+      .withMessage("Password must be a string"),
+    body("reason")
+      .optional()
+      .isIn(["user_requested", "inactive", "violation", "other"])
+      .withMessage("Invalid deletion reason"),
+    body("confirm")
+      .optional()
+      .isBoolean()
+      .withMessage("Confirm must be a boolean"),
+  ]),
+  authController.deleteAccount,
 );
 
 export default router;

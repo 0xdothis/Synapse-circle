@@ -25,8 +25,11 @@ const config = {
   refreshSecret: process.env.REFRESH_SECRET,
   refreshExpiresIn: process.env.REFRESH_EXPIRE || "4d",
 
+  // Google OAuth Configuration
   googleClientId: process.env.GOOGLE_CLIENT_ID,
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  googleAndroidClientId: process.env.GOOGLE_ANDROID_CLIENT_ID,
+  googleIOSClientId: process.env.GOOGLE_IOS_CLIENT_ID,
 
   disableEmailSending: process.env.DISABLE_EMAIL_SENDING === "true",
   disableRateLimiting: process.env.DISABLE_RATE_LIMITING === "true",
@@ -43,5 +46,15 @@ const config = {
     fromEmail: process.env.BREVO_FROM_EMAIL,
   },
 };
+
+// Log Google config status (but don't expose secrets)
+if (config.isDevelopment) {
+  console.log("🔑 Google OAuth Config:", {
+    clientIdSet: !!config.googleClientId,
+    clientId: config.googleClientId
+      ? config.googleClientId.substring(0, 20) + "..."
+      : "Not set",
+  });
+}
 
 export default config;
