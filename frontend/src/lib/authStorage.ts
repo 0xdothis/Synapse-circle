@@ -1,8 +1,17 @@
 
 const TOKEN_KEY = "safewalk"
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+export function getToken(): {token: string; email: string; isVerified: boolean} | null {
+  const localToken = localStorage.getItem(TOKEN_KEY)
+
+  if (!localToken) {
+      return null
+    }
+
+  const token = JSON.parse(localToken)
+
+  return token.state;
+  
 }
 
 

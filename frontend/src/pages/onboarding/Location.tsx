@@ -1,3 +1,4 @@
+import React from "react"
 import Template from "@/components/onboarding/Template";
 import { AlertIcon, Location06Icon, LocationCheck02Icon, LocationOffline03Icon } from "@hugeicons/core-free-icons";
 import Button from "@/components/ui/button"
@@ -20,11 +21,24 @@ function Location() {
   const userLocation = useOnboardingStore(state => state.onboardingData.location);
   const updateLocation = useOnboardingStore(state => state.updateLocation)
 
+
+  React.useEffect(() => {
+
+    if (userLocation.latitude > 0) {
+      return;
+    }
+
+    getLocation();
+  }, [])
+
+
   const { isPending, mutate } = useMutation({
     mutationFn: onboardingRegistration,
     onSuccess: (data) => {
 
-      console.log(data)
+      if (!data.success) {
+        return;
+      }
 
       if (permissionStatus === "granted") {
 
@@ -45,33 +59,32 @@ function Location() {
   })();
 
 
-  function handleLocation() {
+  async function handleLocation() {
 
-    getLocation();
 
-    if (!location) {
+    const coords = location ?? (await getLocation())
+
+    if (!coords) {
       return;
     }
 
-    updateLocation({ latitude: location.lat, longitude: location.lng });
 
-    if (!userLocation) {
-      console.log('USER LOCATION', userLocation)
-      return;
-    }
-
+    const newLocation = { latitude: coords.lat, longitude: coords.lng }
+    updateLocation(newLocation)
 
     const data = {
       step: "location",
       data: {
-        location: userLocation
+        location: newLocation
       }
     }
 
     mutate(data)
   }
 
-  if (isPending) <Loader heading="Location Access" description="We are accessing your location kindly wait" />
+  if (isPending) {
+    return <Loader heading="Location Access" description="We are accessing your location kindly wait" />
+  }
 
 
   return (
@@ -89,11 +102,11 @@ function Location() {
         getButtonText === "Allow Location Access" && Location06Icon ||
         LocationCheck02Icon}>
 
-      <Button onClick={handleLocation} className=""> {isPending ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
+      <Button onClick={handleLocation}> {isPending ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
       {getButtonText === "Continue" ? undefined : <Modal trigger="Not Now" icon={AlertIcon} title="Are you sure?" description="Enable location access to share your real-time location with trusted contacts during emergencies.">
         <DialogClose render={<Button variant="ghost" onClick={() => navigate("/onboarding/trusted-contact")}>Continue Without Location</Button>} />
 
-        <DialogClose render={<Button onClick={() => handleLocation()}>Enable Location</Button>} />
+        <DialogClose render={<Button onClick={handleLocation}>Enable Location</Button>} />
       </Modal>
       }
 

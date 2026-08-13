@@ -23,12 +23,12 @@ function DirectoryCard({ hospitalInfo }: { hospitalInfo: HospitalProps }) {
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1 text-neutral-700 text-sm">
           <HugeiconsIcon icon={LocationIcon} size={16} />
-          <span>{hospitalInfo.distance.km}</span>
+          <span>{`${hospitalInfo.distance.km} km`}</span>
         </div>
 
         <div className="flex items-center gap-1 text-neutral-700 text-sm">
           <HugeiconsIcon icon={ClockIcon} size={16} />
-          <span>{hospitalInfo.distance.drive}</span>
+          <span>{`${hospitalInfo.distance.drive} min drive`}</span>
         </div>
       </div>
       <div className="text-sm text-neutral-700 space-y-1">

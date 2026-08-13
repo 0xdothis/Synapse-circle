@@ -15,16 +15,12 @@ import { useOnboardingStore } from "@/store/useOnboardingStore";
 
 const items = [
   { label: "Select Relationship", value: null },
-  { label: "Mother", value: "mother" },
-  { label: "Father", value: "father" },
-  { label: "Wife", value: "wife" },
-  { label: "Husband", value: "husband" },
-  { label: "Sister", value: "sister" },
-  { label: "Brother", value: "brother" },
-  { label: "Uncle", value: "uncle" },
-  { label: "Aunt", value: "aunt" }
+  { label: "Parent", value: "parent" },
+  { label: "Friend", value: "friend" },
+  { label: "Roommate", value: "roommatr" },
+  { label: "Partner", value: "partner" },
+  { label: "Other", value: "other" }
 ]
-
 
 export interface EmergencyContactStateProps {
   name: string;
@@ -83,7 +79,7 @@ function EmergencyContact({ index }: EmergencyContactProps) {
         </Field>
         <Field>
           <FieldLabel htmlFor={`email-${index}`}>Email Address <small className="text-error text-sm">*</small></FieldLabel>
-          <Input id="email" type="email" value={contact.email} onChange={handleChange} pattern="^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$" placeholder="sample@email.com" required />
+          <Input id="email" type="email" value={contact.email} onChange={handleChange} placeholder="sample@email.com" required />
         </Field>
         <Field>
           <FieldLabel htmlFor={`relationship-${index}`}>Relationship<small className="text-error text-sm">*</small></FieldLabel>

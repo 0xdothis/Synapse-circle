@@ -1,12 +1,28 @@
 import Header from "@/components/dashboard/Header"
 import Button from "@/components/ui/button"
+import { trackEvent } from "@/lib/mixpanelClient";
+import { cancelAlert } from "@/utils/safewalkFn";
+import { useMutation } from "@tanstack/react-query";
 import React from "react"
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 
 
 function CountDown() {
-  const [timer, setTimer] = React.useState(5);
-  const navigate = useNavigate()
+  const [timer, setTimer] = React.useState(10);
+  const navigate = useNavigate();
+  const { state } = useLocation()
+  const { mutate, isPending } = useMutation({
+    mutationFn: cancelAlert,
+    onSuccess: (data) => {
+      console.log(data)
+
+      navigate("/dashboard/emergency-cancelled")
+    },
+    onError: (err) => {
+      console.error(err)
+    }
+
+  })
 
   React.useEffect(() => {
 
@@ -21,9 +37,12 @@ function CountDown() {
 
     return () => clearTimeout(countdown);
 
-
-
   }, [timer])
+
+  function handleCancelAlert() {
+    trackEvent("alert_cancelled")
+    mutate({ id: state.id, reason: "user_error" })
+  }
   return (
     <section className="relative pt-4 pb-16 flex flex-col flex-1 min-h-screen items-center">
       <Header title="Emergency Countdown" caption="Hold tight, help is on the way" className="flex-col-reverse" />
@@ -38,7 +57,7 @@ function CountDown() {
             {timer}
           </div>
         </div>
-        <Button variant="outline" className="w-70" onClick={() => navigate("/dashboard/emergency-cancelled")}>Cancel</Button>
+        <Button variant="outline" className="w-70" disabled={isPending} onClick={handleCancelAlert}>Cancel</Button>
       </div>
     </section>
   )
