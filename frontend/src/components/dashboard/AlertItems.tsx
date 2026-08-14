@@ -1,17 +1,25 @@
 import { Link } from "react-router"
-import { type AlertProps } from "./data"
 import AlertCard from "./AlertCard"
+import type { AlertSchema } from "@/types"
+import React from "react"
 
 interface AlertItemsProps {
-  data: AlertProps[]
+  data: AlertSchema[]
 }
 
 function AlertItems({ data }: AlertItemsProps) {
+  const [clicked, setIsClicked] = React.useState(false)
 
-  console.log("[ALERT DATA]", data)
+
   return (
     <div className="flex flex-col gap-3">
-      {data.map(alert => (<Link to={`${alert.id}`} key={`${alert.time}-${alert.duration}`}>
+      {data.map(alert => (<Link to={`${alert.id}`} key={alert.id} aria-disabled={clicked} onClick={(e) => {
+        if (clicked) {
+          e.preventDefault();
+          return
+        }
+        setIsClicked(true)
+      }}>
         <AlertCard alertInfo={alert} />
       </Link>))
       }

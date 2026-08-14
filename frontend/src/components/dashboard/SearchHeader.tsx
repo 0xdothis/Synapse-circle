@@ -3,7 +3,7 @@ import React from "react";
 
 interface SearchHeaderProps {
   title: string;
-  caption: string;
+  caption?: string;
   children: React.ReactNode
 
 }

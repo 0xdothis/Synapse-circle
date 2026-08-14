@@ -14,6 +14,7 @@ import { useMutation } from "@tanstack/react-query";
 import { login } from "@/utils/safewalkFn";
 import Loader from "@/components/Loader";
 import { useAuthStore } from "@/store/useAuthStore";
+import { toast } from "sonner";
 
 
 export interface LoginCredentials {
@@ -35,14 +36,15 @@ function Signin() {
     onSuccess: (data) => {
 
       if (!data.success) {
-        console.log(data.message || "login failed");
+        toast.error(data.message)
         return;
       }
 
-      const authToken = data.refreshToken
+      const authToken = data.accessToken;
+      const isVerified = data.user?.isVerified
 
-      if (authToken) {
-        authLogin(authToken)
+      if (authToken && isVerified) {
+        authLogin(authToken, isVerified)
       }
 
 

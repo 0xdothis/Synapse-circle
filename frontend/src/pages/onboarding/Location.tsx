@@ -11,6 +11,7 @@ import { useMutation } from "@tanstack/react-query";
 import { onboardingRegistration } from "@/utils/safewalkFn";
 import { useOnboardingStore } from "@/store/useOnboardingStore";
 import Loader from "@/components/Loader"
+import { toast } from "sonner";
 
 
 
@@ -37,10 +38,12 @@ function Location() {
     onSuccess: (data) => {
 
       if (!data.success) {
+        toast.error(data.message)
         return;
       }
 
       if (permissionStatus === "granted") {
+        toast.success("Location Added ✅ ")
 
         navigate("/onboarding/trusted-contact")
       }

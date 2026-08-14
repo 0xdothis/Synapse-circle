@@ -18,6 +18,7 @@ import Link from "@/components/ui/Link"
 import { useMutation } from "@tanstack/react-query"
 import { resendOTP, verifyOTP } from "@/utils/safewalkFn"
 import { useAuthStore } from "@/store/useAuthStore"
+import { toast } from "sonner"
 
 function SignUpVerification() {
 
@@ -54,6 +55,7 @@ function SignUpVerification() {
       const isVerified = data.user?.isVerified!
 
       if (token && isVerified) {
+        toast.success("Account Verified ✅")
         signup(token, email!, isVerified)
       }
 
@@ -62,7 +64,7 @@ function SignUpVerification() {
 
     },
     onError: (err) => {
-      console.log(err)
+      console.log("Error", err)
     }
   })
 

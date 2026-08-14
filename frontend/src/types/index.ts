@@ -60,8 +60,9 @@ export const errorSchema = z.object({
 })
 
 export const createContactSchema = z.object({
+    id:z.string().optional(),
     name: z.string(),
-    phoneNumber: z.string().optional(),
+    phoneNumber: z.string(),
     email: z.email(),
     relationship: z.string().nullable()
 });
@@ -113,27 +114,36 @@ export const emergencyContactResponse = z.object({
 export const triggerSOSDTO = z.object({
     latitude: z.number(),
     longitude: z.number(),
-    locationAvailable: z.boolean()
+    available: z.boolean()
 })
 
-export const SOSAlert = z.object({
+export const SOSAlertSchema = z.object({
+    cancellationReason: z.string(),
+    cancelledAt: z.string(),
+    durationMs: z.number(),
     id: z.string().optional(),
+    location: triggerSOSDTO,
+    locationLabel: z.string().nullable(),
+    locationLink: z.string(),
+    message: z.string(),
+    recipientStats: z.object({total: z.number(), delivered: z.number(), failed: z.number()}),
+    recipients: z.array(z.object({
+    name: z.string(),
+    email: z.email(),
+    relationship: z.string(),
+    status: z.string()
+    })),
+    resolutionReason: z.string(),
+    resolvedAt: z.string(),
+    resolvedBy: z.string(),
+    responseTimeline: z.array(z.object({
+    event: z.string(),
+    status: z.string(),
+    timestamp: z.string()
+    })),
     status: z.string(),
     timestamp: z.string(),
-    location: z.object({
-        latitude: z.number(),
-        longitude: z.number(),
-        available: z.boolean()
-    }),
-    locationLink: z.string(),
-    contactsNotified: z.array(z.object({
-        name: z.string(),
-        email: z.email(),
-        delivered: z.boolean()
-    })),
-    canCancel: z.boolean(),
-    cancellationTimeRemaining: z.number()
-
+    universityName: z.string()
 })
 
 export const SOSSchema = z.object({
@@ -166,10 +176,11 @@ export const SOSStatusSchema = z.object({
 })
 
 export const alertHistorySchema = z.object({
-    alerts: z.array(SOSAlert),
+    alerts: z.array(SOSAlertSchema),
     total: z.number(),
     offset: z.number(),
     limit: z.number(),
+    success: z.boolean()
 })
 
 export const userResponseSchema = z.object({
@@ -180,8 +191,12 @@ export const userResponseSchema = z.object({
     isVerified: z.boolean(),
     isActive: z.boolean().optional(),
     profilePicture: z.string().optional(),
-    university: z.string().optional(),
-    universityId: z.string().optional(),
+    selectedUniversity: z.string().optional(),
+    university: z.object({
+        acronym: z.string().optional(),
+        location: z.string().optional(),
+        name: z.string().optional()
+    }).optional(),
     onboardingStep: z.string(),
     authProvider: z.string(),
     trustedContactsCount: z.number().optional(),
@@ -200,7 +215,7 @@ export const userResponseSchema = z.object({
 export const createAuthResponseSchema = <T extends z.ZodType>(dataSchema: T) => {
     return z.object({
         success: z.boolean(),
-        message: z.string(),
+        message: z.string().optional(),
         development_otp: z.string().optional(),
         user: userResponseSchema.optional(),
         accessToken: z.string().optional(),
@@ -208,18 +223,22 @@ export const createAuthResponseSchema = <T extends z.ZodType>(dataSchema: T) => 
         isVerified: z.boolean().optional(),
         data: dataSchema.optional(),
         errors: z.array(z.string()).optional()
+
     })
 }
 
 export const signupAuthResponseSchema = createAuthResponseSchema(signupSchema)
 export const loginAuthResponseSchema = createAuthResponseSchema(userResponseSchema);
+export const alertResponseSchema = createAuthResponseSchema(alertHistorySchema)
 
 export type signupDTO = z.infer<typeof signupSchema>
 export type ErrorResponse = z.infer<typeof errorSchema>
 export type SignupResponse = z.infer<typeof signupAuthResponseSchema>
 export type LoginResponse = z.infer<typeof loginAuthResponseSchema>
 export type ContactDTO = z.infer<typeof createContactSchema>
+export type AlertResponse = z.infer<typeof alertHistorySchema> 
 
+export type AlertSchema = z.infer<typeof SOSAlertSchema>
 export type userResponse = z.infer<typeof userSchema>
 
 export interface loginCredentials {
@@ -232,7 +251,7 @@ export interface AuthState {
     token: string | null;
     isVerified: boolean | null;
     signup: (token: string, email: string, isVerified: boolean) => void;
-    login: (token: string) => void;
+    login: (token: string, isVerified: boolean) => void;
     logout: () => void;
 }
 

@@ -17,6 +17,7 @@ import { signupUser } from "@/utils/safewalkFn";
 import type { signupDTO } from "@/types";
 import { useAuthStore } from "@/store/useAuthStore";
 import Loader from "@/components/Loader"
+import { toast } from "sonner";
 
 
 export interface UserDataProps {
@@ -42,17 +43,16 @@ function Signup() {
     onSuccess: (data) => {
 
       if (!data.success) {
-        console.log(data.message || "signup failed");
+        toast.error(data.message)
         return;
       }
-
-      console.log(data)
 
       const token = data.accessToken;
       const isVerified = data.user?.isVerified!;
 
       if (token && !isVerified) {
         signup(token, userInfo.email, isVerified)
+        toast.success("Account created successfully")
       }
 
       setUserInfo({ name: "", password: "", email: "", confirmPassword: "", phoneNumber: "", terms: false })
