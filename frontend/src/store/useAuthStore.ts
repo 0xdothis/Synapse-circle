@@ -9,7 +9,7 @@ export const useAuthStore = create<AuthState>()(
         token: null,
         isVerified: null,
     signup: (token:string, email: string, isVerified: boolean) => set({ token, email, isVerified }),
-    login: (token: string) => set({ token }),
+    login: (token: string, isVerified: boolean) => set({ token, isVerified }),
     logout: () => {
 
             set({ token:null});

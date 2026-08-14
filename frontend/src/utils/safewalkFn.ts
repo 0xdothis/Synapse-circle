@@ -1,7 +1,7 @@
 
 import type { LoginCredentials } from "@/components/auth/login";
 import { clearAuth, getToken } from "@/lib/authStorage";
-import {loginAuthResponseSchema, signupAuthResponseSchema, type ContactDTO, type LoginResponse, type signupDTO, type SignupResponse } from "@/types";
+import {alertHistorySchema, loginAuthResponseSchema, signupAuthResponseSchema, type AlertResponse, type ContactDTO, type LoginResponse, type signupDTO, type SignupResponse } from "@/types";
 
 const URL = import.meta.env.VITE_BACKEND_URL || "https://synap-circle.onrender.com/api"
 
@@ -115,14 +115,11 @@ export const login = async (user: LoginCredentials): Promise<LoginResponse> => {
     })
 
     const rawJson = await res.json();
+
+    console.log("[RAW LOGIN]", rawJson)
     
 
     const result = loginAuthResponseSchema.parse(rawJson)
-    console.log(result)
-
-    if(!result.success) {
-        throw new Error(rawJson.message || "Something went wrong try again")
-    }
 
     return result
 
@@ -149,11 +146,6 @@ export const onboardingRegistration = async(onboardingInfo: {
     }
 
 
-
-
-    console.log("[OnboardingInfo]", onboardingInfo)
-
-
         const reqData = {
         step: onboardingInfo.step,
         data: onboardingInfo.data
@@ -171,8 +163,6 @@ export const onboardingRegistration = async(onboardingInfo: {
     })
 
     const rawJson = await res.json();
-
-    console.log(rawJson)
 
     return rawJson
 
@@ -208,8 +198,6 @@ export const triggerSOS = async (sosData: {latitude: number, longitude: number, 
     }
 
 
-
-
   const res = await fetch(`${URL}/sos/trigger`, {
         method: "POST",
         headers: {
@@ -223,13 +211,11 @@ export const triggerSOS = async (sosData: {latitude: number, longitude: number, 
 
     const rawJson = await res.json();
 
-    console.log(rawJson)
-
     return rawJson
 
 }
 
-export const alertHistory = async () => {
+export const alertHistory = async (): Promise<AlertResponse> => {
 
       const localToken = getToken()
 
@@ -252,10 +238,10 @@ export const alertHistory = async () => {
 
     const rawJson = await res.json();
 
-    return rawJson
+    const result = alertHistorySchema.parse(rawJson)
 
 
-
+    return result
 }
 
 
@@ -284,9 +270,6 @@ export const alertDetail = async ( id: string) => {
     const rawJson = await res.json();
 
     return rawJson
-
-
-
 }
 
 
@@ -299,7 +282,8 @@ export const cancelAlert = async ( {id, reason}: {id: string, reason: string}) =
      if(!token) {
         throw new Error("Something went wrong");
     }
-
+    console.log("[ALERT REASON]", reason)
+    console.log("[ALERT ID]", id)
 
   const res = await fetch(`${URL}/sos/cancel/${id}`, {
         method: "POST",
@@ -312,6 +296,8 @@ export const cancelAlert = async ( {id, reason}: {id: string, reason: string}) =
 
 
     const rawJson = await res.json();
+
+    console.log(rawJson)
 
     return rawJson
 
@@ -343,16 +329,40 @@ export const userProfile = async () => {
 
     const rawJson = await res.json();
 
+
     return rawJson
-
-
 
 }
 
 
 
 
-export const logout = async() => {
+export const logout = async({refreshToken}: {refreshToken: string}) => {
+   
+    if(!refreshToken) {
+        throw new Error("Something went wrong");
+
+    }
+
+
+  const res = await fetch(`${URL}/auth/logout`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+             "Authorization": `${refreshToken}`
+
+        },
+        body: JSON.stringify({refreshToken})
+    })
+
+
+    const rawJson = await res.json();
+
+    console.log("Logout", rawJson)
+
     clearAuth();
+
+    return rawJson
+
     
 }

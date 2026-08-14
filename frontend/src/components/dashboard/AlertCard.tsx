@@ -1,26 +1,27 @@
 
 
-import type { AlertProps } from "./data"
+import type { AlertSchema } from "@/types"
+import { timeData } from "@/utils/formatTime"
+import { getStatus } from "@/utils/status"
 
 
 
 
 function AlertCard({ alertInfo }: {
-  alertInfo: AlertProps
+  alertInfo: AlertSchema
 }) {
-
 
 
   return (
     <div className="border border-neutral-200 rounded-lg bg-white p-4 space-y-1">
       <div className="flex justify-between items-center mb-1.5">
-        <p className="text-xs text-neutral-700">{alertInfo.time}</p>
-        <span className={`text-xs font-semibold ${alertInfo.tag === "Resolved" ? "bg-success-100 text-success-700 border-success-300" : "bg-danger-100 text-danger-700 border-danger-300"} py-0.5 px-1.5 border rounded-md`}>{alertInfo.tag}</span>
+        <p className="text-xs text-neutral-700">{timeData(alertInfo.cancelledAt)}</p>
+        {getStatus(alertInfo.cancellationReason)}
       </div>
-      <h3 className="text-neutral-900 font-bold">{alertInfo.title}</h3>
+      <h3 className="text-neutral-900 font-bold">Emergency Alert</h3>
       <div className="text-sm text-neutral-700 space-y-1">
-        <p>{`📍 ${alertInfo.school}`}</p>
-        <p>{`⏱️ Duration: ${alertInfo.duration}`}</p>
+        <p>{`📍 ${alertInfo.universityName}`}</p>
+        <p>{`⏱️ Duration: ${Math.ceil(alertInfo.durationMs / 60000)}`} Min</p>
       </div>
     </div>
   )

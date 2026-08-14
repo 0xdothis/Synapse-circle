@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/utils";
-import { useOnboardingStore } from "@/store/useOnboardingStore";
+import type { ContactDTO } from "@/types";
 
 const items = [
   { label: "Select Relationship", value: null },
@@ -30,13 +30,13 @@ export interface EmergencyContactStateProps {
 }
 
 interface EmergencyContactProps {
-  index: number;
+  index?: number;
+  contact: ContactDTO;
+  onChange: (updatedContact: ContactDTO) => void;
 }
 
-function EmergencyContact({ index }: EmergencyContactProps) {
-  const contact = useOnboardingStore(state => state.onboardingData.contacts[index])
+function EmergencyContact({ index, contact, onChange }: EmergencyContactProps) {
 
-  const handleContactChange = useOnboardingStore(state => state.handleContactChange);
   const [touched, setTouched] = React.useState(false)
   const isInvalid = touched && contact.relationship === null
 
@@ -45,7 +45,7 @@ function EmergencyContact({ index }: EmergencyContactProps) {
 
     if (!contact) return;
 
-    handleContactChange(index, {
+    onChange({
       ...contact,
       [id]: value
     })
@@ -56,7 +56,7 @@ function EmergencyContact({ index }: EmergencyContactProps) {
     if (!contact) return;
     setTouched(true)
 
-    handleContactChange(index, {
+    onChange({
       ...contact,
       relationship: value ?? null
     })
@@ -67,7 +67,7 @@ function EmergencyContact({ index }: EmergencyContactProps) {
 
   return (
     <FieldSet className="w-full">
-      <FieldDescription className=" -mb-2">EMERGENCY CONTACT {index + 1}</FieldDescription>
+      {<FieldDescription className=" -mb-2">EMERGENCY CONTACT {index! + 1}</FieldDescription>}
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor={`name-${index}`}>Full Name <small className="text-error text-sm">*</small></FieldLabel>

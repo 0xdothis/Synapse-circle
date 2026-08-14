@@ -19,16 +19,6 @@ export type HospitalProps = {
 
 }
 
-export type AlertProps = {
-    id?: string;
-    tag: string;
-    title: string;
-    time: string;
-    school: string;
-    duration: number;
-
-}
-
 
 export const hospitals: HospitalProps[] = [
     {
@@ -80,30 +70,4 @@ export const hospitals: HospitalProps[] = [
     },
 
 
-]
-
-
-export const alerts: AlertProps[] = [
-    {
-        tag: "Resolved",
-        title: "Emergency Alert",
-        time: "12 July 2026 — 8:43 PM",
-        school: "University of Ilorin",
-        duration: 12
-    },
-{
-        tag: "False Alarm",
-        title: "Emergency Alert",
-        time: "28 June 2026 — 3:15 PM",
-        school: "Student Union Building",
-        duration: 2
-    },
-
- {
-        tag: "Resolved",
-        title: "Emergency Alert",
-        time: "15 June 2026 — 11:20 PM",
-        school: "Faculty of Science",
-        duration: 8
-    }
 ]

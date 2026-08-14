@@ -52,8 +52,14 @@ export const verifiedOnlyLoader = () => {
 
     const localToken = getToken();
 
-    if (localToken?.isVerified && localToken?.isVerified) {
+    console.log(localToken)
+
+    if (localToken?.token && localToken?.isVerified) {
       return redirect("/dashboard")
+    }
+
+    if(!localToken?.isVerified) {
+      return redirect("/auth/login")
     }
 
       return null

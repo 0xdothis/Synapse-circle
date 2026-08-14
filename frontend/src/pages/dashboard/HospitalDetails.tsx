@@ -7,7 +7,7 @@ import { HugeiconsIcon } from "@hugeicons/react"
 function HospitalDetails() {
   return (
     <div>
-      <DetailsTemplate />
+      <DetailsTemplate title="Hospital Details" />
       <div className="space-y-6 py-6">
         <div className="space-y-2">
           <div className="flex justify-between items-center">

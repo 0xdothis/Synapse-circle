@@ -3,25 +3,90 @@ import React from "react"
 import Modal from "@/components/dashboard/Modal"
 import { DialogClose } from "@/components/ui/dialog"
 import { useNavigate } from "react-router"
+import { useMutation } from "@tanstack/react-query"
+import { cancelAlert } from "@/utils/safewalkFn"
+import { useAlertStore } from "@/store/useAlertStore"
+import { formatTime } from "@/utils/formatTime"
+import { trackEvent } from "@/lib/mixpanelClient"
+import { toast } from "sonner"
 
 
 
 function Emergency() {
   const [seconds, setSeconds] = React.useState(0)
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const activeAlertId = useAlertStore(state => state.activeAlertId)
+  const clearActiveAlertId = useAlertStore(state => state.clearActiveAlertId)
 
-  function handleNavigate() {
-    navigate("/dashboard/false-alarm");
+  const { mutate: safeCancel } = useMutation({
+    mutationFn: cancelAlert,
+    onSuccess: (data) => {
+      console.log("[SAFE ALERT]", data)
+      if (!data.success) {
+        trackEvent("alert_delivery_failed")
+        return;
+      }
+      toast.success("Safe Email Dispatched")
+      clearActiveAlertId()
+      trackEvent("alert_delivery_confirmed")
+      navigate("/dashboard/emergency-ended")
+    },
+    onError: (err) => {
+      console.error(err)
+    }
+
+  })
+
+
+  const { mutate: falseAlarm } = useMutation({
+    mutationFn: cancelAlert,
+    onSuccess: (data) => {
+      if (!data.success) {
+        trackEvent("alert_delivery_failed")
+      }
+
+      clearActiveAlertId();
+      toast.info("False Alarm Email Dispatched")
+      trackEvent("false_alarm_confirmed")
+      navigate("/dashboard/false-alarm")
+    },
+    onError: (err) => {
+      console.error(err)
+    }
+
+  })
+
+
+
+
+  function handleFalseAlarm() {
+
+    if (!activeAlertId) {
+      return;
+    }
+
+    trackEvent("false_alarm_cancel_clicked")
+
+    falseAlarm({ id: activeAlertId, reason: "false_alarm" })
   }
+
+
 
   function handleSafe() {
 
-    if (seconds <= 30) {
-      return
+    if (!activeAlertId) {
+      return;
     }
 
 
-    navigate("/dashboard/emergency-ended")
+    if (seconds < 30) {
+      return
+    }
+
+    trackEvent("alert_dispatched")
+
+
+    safeCancel({ id: activeAlertId, reason: "resolved" })
   }
 
 
@@ -32,17 +97,6 @@ function Emergency() {
 
     return () => clearInterval(interval)
   }, [])
-
-
-  const formatTime = (totalSeconds: number): string => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-
-    const paddedmins = String(mins).padStart(2, "0");
-    const paddedSecs = String(secs).padStart(2, "0")
-
-    return `${paddedmins}:${paddedSecs}`
-  }
 
 
 
@@ -72,7 +126,7 @@ function Emergency() {
       <Modal trigger={<Button variant="sos" className="bg-danger-400 w-full focus:bg-danger-400 hover:bg-danger-500">False Alarm</Button>} title="False Alarm?" description="Are you sure this was a false alarm? Your trusted contacts and campus security will be informed that you are safe." >
         <div className="flex justify-between gap-2">
           <DialogClose render={<Button variant="outline" className="flex-1/2">Cancel</Button>} />
-          <DialogClose render={<Button className="flex-1/2" onClick={handleNavigate}>Yes, Cancel</Button>} />
+          <DialogClose render={<Button className="flex-1/2" onClick={handleFalseAlarm}>Yes, Cancel</Button>} />
         </div>
       </Modal>
 
