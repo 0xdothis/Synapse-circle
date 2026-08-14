@@ -1,6 +1,34 @@
 import mongoose from "mongoose";
 import config from "../utils/config.js";
 
+const timelineEventSchema = new mongoose.Schema(
+  {
+    event: {
+      type: String,
+      enum: [
+        "sos_activated",
+        "trusted_contacts_notified",
+        "security_dispatched",
+        "location_tracking_started",
+        "resolved",
+        "false_alarm",
+        "cancelled",
+      ],
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: ["completed", "failed", "skipped", "pending"],
+      default: "completed",
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
+
 const sosAlertSchema = new mongoose.Schema(
   {
     userId: {
@@ -22,9 +50,15 @@ const sosAlertSchema = new mongoose.Schema(
     locationLink: {
       type: String,
     },
+    locationLabel: {
+      type: String,
+    },
+    universityName: {
+      type: String,
+    },
     status: {
       type: String,
-      enum: ["sent", "cancelled", "failed", "resolved"],
+      enum: ["sent", "resolved", "false_alarm", "cancelled", "failed"],
       default: "sent",
     },
     message: {
@@ -37,13 +71,25 @@ const sosAlertSchema = new mongoose.Schema(
     },
     cancellationReason: {
       type: String,
-      enum: ["false_alarm", "resolved", "user_error"],
+      enum: ["false_alarm", "user_error", "other"],
+    },
+    resolvedAt: {
+      type: Date,
+    },
+    resolvedBy: {
+      type: String,
+      enum: ["user", "campus_security", "admin", "system"],
+    },
+    resolutionReason: {
+      type: String,
+      trim: true,
+    },
+    timeline: {
+      type: [timelineEventSchema],
+      default: [],
     },
     // Who was notified and their delivery status now lives exclusively in
     // the AlertRecipient collection (query with { alertId: this._id }).
-    // This alert previously also embedded `contactsNotified` and
-    // `recipients` arrays that duplicated the same data — removed to stop
-    // maintaining two sources of truth for delivery state.
     emailSubject: {
       type: String,
     },
@@ -90,6 +136,24 @@ sosAlertSchema.methods.getCancellationTimeRemaining = function () {
   const elapsed = (now - created) / 60000;
 
   return Math.max(0, config.cancellationWindowMinutes - elapsed);
+};
+
+// Duration the alert was active, in whole seconds. Null while still active
+// (status "sent" with no resolvedAt/cancelledAt yet).
+sosAlertSchema.methods.getDurationSeconds = function () {
+  const end = this.resolvedAt || this.cancelledAt;
+  if (!end) return null;
+
+  const created = new Date(this.createdAt);
+  return Math.max(0, Math.round((new Date(end) - created) / 1000));
+};
+
+sosAlertSchema.methods.addTimelineEvent = function (
+  event,
+  status = "completed",
+  timestamp = new Date(),
+) {
+  this.timeline.push({ event, status, timestamp });
 };
 
 export default mongoose.model("SOSAlert", sosAlertSchema);

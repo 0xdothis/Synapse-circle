@@ -22,7 +22,6 @@ describe("SOS Alert Integration Tests", () => {
     authData = await getAuthToken(testUser);
     userId = authData.userId;
 
-    // Ensure user has contacts
     await request(app)
       .post("/api/contacts")
       .set("Authorization", `Bearer ${authData.accessToken}`)
@@ -33,7 +32,6 @@ describe("SOS Alert Integration Tests", () => {
       })
       .expect(201);
 
-    // Ensure campus security exists
     const securityExists = await CampusSecurity.findOne();
     if (!securityExists) {
       await CampusSecurity.create({
@@ -52,7 +50,7 @@ describe("SOS Alert Integration Tests", () => {
         latitude: 37.7749,
         longitude: -122.4194,
         locationAvailable: true,
-        message: "Emergency! Need help!",
+        locationLabel: "Main Library",
       };
 
       const res = await request(app)
@@ -64,21 +62,45 @@ describe("SOS Alert Integration Tests", () => {
       expect(res.body).toHaveProperty("success", true);
       expect(res.body).toHaveProperty("alertId");
       expect(res.body).toHaveProperty("status", "sent");
+      expect(res.body).toHaveProperty("message");
       expect(res.body).toHaveProperty("contactsNotified");
       expect(res.body.contactsNotified).toBeInstanceOf(Array);
       expect(res.body.contactsNotified.length).toBeGreaterThan(0);
       expect(res.body).toHaveProperty("deliveredCount");
       expect(res.body).toHaveProperty("totalCount");
+      expect(res.body).toHaveProperty("responseTimeline");
+      expect(res.body.responseTimeline).toBeInstanceOf(Array);
+
+      // Check response timeline
+      const timelineEvents = res.body.responseTimeline.map((e) => e.event);
+      expect(timelineEvents).toContain("SOS Triggered");
+      expect(timelineEvents).toContain("Trusted Contacts Notified");
+      expect(timelineEvents).toContain("Campus Security Notified");
+      expect(timelineEvents).toContain("Location Tracking Started");
+
+      // Check contacts have status
+      res.body.contactsNotified.forEach((contact) => {
+        expect(contact).toHaveProperty("status");
+        expect(["sent", "failed"]).toContain(contact.status);
+        expect(contact).toHaveProperty("relationship");
+      });
 
       alertId = res.body.alertId;
 
-      // Verify alert in database
       const alert = await SOSAlert.findById(alertId);
       expect(alert).toBeTruthy();
       expect(alert.userId.toString()).toBe(userId);
       expect(alert.status).toBe("sent");
       expect(alert.latitude).toBe(locationData.latitude);
       expect(alert.longitude).toBe(locationData.longitude);
+      expect(alert.locationLabel).toBe("Main Library");
+      expect(alert).toHaveProperty("message");
+
+      const timelineEventsDb = alert.timeline.map((e) => e.event);
+      expect(timelineEventsDb).toContain("sos_activated");
+      expect(timelineEventsDb).toContain("trusted_contacts_notified");
+      expect(timelineEventsDb).toContain("security_dispatched");
+      expect(timelineEventsDb).toContain("location_tracking_started");
     });
 
     it("should get alert status", async () => {
@@ -103,13 +125,14 @@ describe("SOS Alert Integration Tests", () => {
         .expect(200);
 
       expect(res.body).toHaveProperty("success", true);
-      expect(res.body).toHaveProperty("status", "cancelled");
+      expect(res.body).toHaveProperty("status", "false_alarm");
       expect(res.body).toHaveProperty("alertId", alertId);
 
-      // Verify alert status updated
       const alert = await SOSAlert.findById(alertId);
-      expect(alert.status).toBe("cancelled");
+      expect(alert.status).toBe("false_alarm");
       expect(alert.cancellationReason).toBe("false_alarm");
+      expect(alert.resolvedBy).toBe("user");
+      expect(alert.resolvedAt).toBeTruthy();
     });
 
     it("should prevent cancelling already cancelled alert", async () => {
@@ -124,9 +147,116 @@ describe("SOS Alert Integration Tests", () => {
     });
   });
 
+  describe("Resolve SOS Flow", () => {
+    let resolveAlertId;
+
+    it("should trigger a fresh alert to resolve", async () => {
+      const res = await request(app)
+        .post("/api/sos/trigger")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({ latitude: 37.7749, longitude: -122.4194 })
+        .expect(200);
+
+      resolveAlertId = res.body.alertId;
+      expect(res.body).toHaveProperty("status", "sent");
+      expect(res.body).toHaveProperty("message");
+      expect(res.body).toHaveProperty("responseTimeline");
+    });
+
+    it("should resolve the alert as campus security", async () => {
+      const res = await request(app)
+        .post(`/api/sos/resolve/${resolveAlertId}`)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({
+          resolvedBy: "campus_security",
+          resolutionReason: "Security responded, student confirmed safe.",
+        })
+        .expect(200);
+
+      expect(res.body).toHaveProperty("success", true);
+      expect(res.body).toHaveProperty("status", "resolved");
+      expect(res.body).toHaveProperty("alertId", resolveAlertId);
+
+      const alert = await SOSAlert.findById(resolveAlertId);
+      expect(alert.status).toBe("resolved");
+      expect(alert.resolvedBy).toBe("campus_security");
+      expect(alert.resolutionReason).toBe(
+        "Security responded, student confirmed safe.",
+      );
+      expect(alert.resolvedAt).toBeTruthy();
+    });
+
+    it("should reflect the resolution in the alert detail response", async () => {
+      const res = await request(app)
+        .get(`/api/sos/history/${resolveAlertId}`)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .expect(200);
+
+      const { alert } = res.body;
+      expect(alert.status).toBe("resolved");
+      expect(typeof alert.durationMs).toBe("number");
+      expect(alert.resolutionSummary).toMatchObject({
+        resolvedBy: "campus_security",
+        resolutionReason: "Security responded, student confirmed safe.",
+      });
+      expect(alert.resolutionSummary).toHaveProperty("durationMs");
+
+      const events = alert.responseTimeline.map((e) => e.event);
+      expect(events).toEqual([
+        "sos_activated",
+        "trusted_contacts_notified",
+        "security_dispatched",
+        "location_tracking_started",
+        "resolved",
+      ]);
+    });
+
+    it("should prevent resolving an already-resolved alert", async () => {
+      const res = await request(app)
+        .post(`/api/sos/resolve/${resolveAlertId}`)
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .send({})
+        .expect(400);
+
+      expect(res.body).toHaveProperty("success", false);
+      expect(res.body.message).toContain("Alert cannot be resolved");
+    });
+
+    it("should still allow resolving after the cancellation window has passed", async () => {
+      const originalWindow = config.cancellationWindowMinutes;
+
+      try {
+        config.cancellationWindowMinutes = 0;
+
+        const triggerRes = await request(app)
+          .post("/api/sos/trigger")
+          .set("Authorization", `Bearer ${authData.accessToken}`)
+          .send({ latitude: 37.7749, longitude: -122.4194 })
+          .expect(200);
+
+        const lateAlertId = triggerRes.body.alertId;
+
+        await request(app)
+          .post(`/api/sos/cancel/${lateAlertId}`)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
+          .send({ reason: "false_alarm" })
+          .expect(400);
+
+        const resolveRes = await request(app)
+          .post(`/api/sos/resolve/${lateAlertId}`)
+          .set("Authorization", `Bearer ${authData.accessToken}`)
+          .send({ resolvedBy: "admin" })
+          .expect(200);
+
+        expect(resolveRes.body).toHaveProperty("status", "resolved");
+      } finally {
+        config.cancellationWindowMinutes = originalWindow;
+      }
+    });
+  });
+
   describe("SOS History", () => {
     it("should get alert history", async () => {
-      // Create multiple alerts
       for (let i = 0; i < 3; i++) {
         await request(app)
           .post("/api/sos/trigger")
@@ -149,6 +279,20 @@ describe("SOS Alert Integration Tests", () => {
       expect(res.body).toHaveProperty("total");
       expect(res.body).toHaveProperty("limit", 20);
       expect(res.body).toHaveProperty("offset", 0);
+
+      // Check new fields
+      res.body.alerts.forEach((alert) => {
+        expect(alert).toHaveProperty("durationMs");
+        expect(alert).toHaveProperty("message");
+        expect(alert).toHaveProperty("responseTimeline");
+        expect(alert).toHaveProperty("recipients");
+        expect(alert).toHaveProperty("recipientStats");
+
+        alert.recipients.forEach((recipient) => {
+          expect(recipient).toHaveProperty("status");
+          expect(["sent", "failed"]).toContain(recipient.status);
+        });
+      });
     });
 
     it("should get specific alert", async () => {
@@ -159,8 +303,29 @@ describe("SOS Alert Integration Tests", () => {
 
       expect(res.body).toHaveProperty("success", true);
       expect(res.body.alert).toHaveProperty("id", alertId);
-      expect(res.body.alert).toHaveProperty("status", "cancelled");
+      expect(res.body.alert).toHaveProperty("status", "false_alarm");
       expect(res.body.alert).toHaveProperty("cancelledAt");
+      expect(res.body.alert).toHaveProperty("message");
+      expect(res.body.alert).toHaveProperty("universityName");
+      expect(res.body.alert).toHaveProperty("locationLabel");
+      expect(typeof res.body.alert.durationMs).toBe("number");
+      expect(res.body.alert).toHaveProperty("responseTimeline");
+      expect(res.body.alert).toHaveProperty("contactsNotified");
+
+      res.body.alert.contactsNotified.forEach((contact) => {
+        expect(contact).toHaveProperty("status");
+        expect(["sent", "failed"]).toContain(contact.status);
+      });
+
+      expect(res.body.alert.resolutionSummary).toMatchObject({
+        resolvedBy: "user",
+        resolutionReason: "false_alarm",
+      });
+      expect(res.body.alert.resolutionSummary).toHaveProperty("durationMs");
+
+      const events = res.body.alert.responseTimeline.map((e) => e.event);
+      expect(events).toContain("sos_activated");
+      expect(events).toContain("false_alarm");
     });
 
     it("should filter history by status", async () => {
@@ -173,6 +338,28 @@ describe("SOS Alert Integration Tests", () => {
       expect(res.body.alerts.every((alert) => alert.status === "sent")).toBe(
         true,
       );
+    });
+
+    it("should treat false_alarm and resolved as distinct, filterable statuses", async () => {
+      const falseAlarmRes = await request(app)
+        .get("/api/sos/history?status=false_alarm")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .expect(200);
+      expect(
+        falseAlarmRes.body.alerts.every((a) => a.status === "false_alarm"),
+      ).toBe(true);
+      expect(falseAlarmRes.body.alerts.some((a) => a.id === alertId)).toBe(
+        true,
+      );
+
+      const resolvedRes = await request(app)
+        .get("/api/sos/history?status=resolved")
+        .set("Authorization", `Bearer ${authData.accessToken}`)
+        .expect(200);
+      expect(
+        resolvedRes.body.alerts.every((a) => a.status === "resolved"),
+      ).toBe(true);
+      expect(resolvedRes.body.alerts.length).toBeGreaterThan(0);
     });
 
     it("should paginate history correctly", async () => {
@@ -196,7 +383,6 @@ describe("SOS Alert Integration Tests", () => {
         process.env.DISABLE_RATE_LIMITING = "false";
         config.disableRateLimiting = false;
 
-        // Make multiple SOS triggers
         for (let i = 0; i < 4; i++) {
           await request(app)
             .post("/api/sos/trigger")
@@ -207,7 +393,6 @@ describe("SOS Alert Integration Tests", () => {
             });
         }
 
-        // The 5th should be rate limited
         const res = await request(app)
           .post("/api/sos/trigger")
           .set("Authorization", `Bearer ${authData.accessToken}`)

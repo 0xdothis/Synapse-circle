@@ -70,6 +70,7 @@ const getFullProfile = async (userId) => {
       id: contact._id,
       name: contact.name,
       email: contact.email,
+      phoneNumber: contact.phoneNumber,
       relationship: contact.relationship,
       isPrimary: contact.isPrimary,
     })),

@@ -19,7 +19,12 @@ class SOSService {
         throw error;
       }
 
-      const { latitude, longitude, locationAvailable = true } = locationData;
+      const {
+        latitude,
+        longitude,
+        locationAvailable = true,
+        locationLabel = null,
+      } = locationData;
 
       // Get user details
       const user = await User.findById(userId);
@@ -83,18 +88,28 @@ class SOSService {
           ? `https://www.google.com/maps?q=${latitude},${longitude}`
           : null;
 
-      // Create the alert record.
+      // Create the alert record
+      const activatedAt = new Date();
       const alert = await SOSAlert.create({
         userId,
         latitude: latitude || null,
         longitude: longitude || null,
         locationAvailable,
         locationLink,
+        locationLabel,
+        universityName: user.university?.name || null,
         message: FIXED_MESSAGE,
         status: "sent",
+        timeline: [
+          {
+            event: "sos_activated",
+            status: "completed",
+            timestamp: activatedAt,
+          },
+        ],
       });
 
-      // Build the recipient list for this alert. Alerts are email-only
+      // Build the recipient list
       const recipients = [];
 
       trustedContacts.forEach((contact) => {
@@ -147,6 +162,7 @@ class SOSService {
       };
 
       const emailResults = await emailService.sendBulkSOSAlerts(emailData);
+      const notifiedAt = new Date();
 
       // Persist delivery results directly as AlertRecipient documents
       const recipientOperations = recipients.map((recipient, index) => ({
@@ -158,8 +174,9 @@ class SOSService {
             recipientId: recipient.recipientId,
             name: recipient.name,
             email: recipient.email,
+            relationship: recipient.relationship,
             emailStatus: emailResults[index].success ? "delivered" : "failed",
-            emailSentAt: new Date(),
+            emailSentAt: notifiedAt,
             emailError: emailResults[index].success
               ? null
               : emailResults[index].error,
@@ -172,9 +189,40 @@ class SOSService {
         await AlertRecipient.bulkWrite(recipientOperations, { ordered: false });
       }
 
-      alert.emailSentAt = new Date();
+      const trustedResults = emailResults.slice(0, trustedContacts.length);
+      const securityResults = emailResults.slice(
+        trustedContacts.length,
+        trustedContacts.length + securityContacts.length,
+      );
+
+      const statusFor = (results) => {
+        if (results.length === 0) return "skipped";
+        return results.some((r) => r.success) ? "completed" : "failed";
+      };
+
+      // Add timeline events
+      alert.addTimelineEvent(
+        "trusted_contacts_notified",
+        statusFor(trustedResults),
+        notifiedAt,
+      );
+      alert.addTimelineEvent(
+        "security_dispatched",
+        statusFor(securityResults),
+        notifiedAt,
+      );
+
+      // Add location tracking started event
+      alert.addTimelineEvent(
+        "location_tracking_started",
+        "completed",
+        activatedAt,
+      );
+
+      alert.emailSentAt = notifiedAt;
       await alert.save();
 
+      // Send confirmation email to user (fire and forget)
       Promise.resolve(
         emailService.sendSOSConfirmationToUser(userId, {
           alertId: alert._id,
@@ -188,12 +236,14 @@ class SOSService {
         logger.error("SOS confirmation email failed:", err);
       });
 
-      // Build the response's notification summary
+      // Build the response's notification summary with delivery status
       const notifications = recipients.map((recipient, index) => ({
         type: recipient.type,
         name: recipient.name,
         email: recipient.email,
+        relationship: recipient.relationship,
         delivered: emailResults[index].success,
+        status: emailResults[index].success ? "sent" : "failed",
       }));
 
       const deliveredCount = notifications.filter((n) => n.delivered).length;
@@ -203,14 +253,47 @@ class SOSService {
         `SOS alert ${alert._id} sent to ${deliveredCount}/${totalCount} recipients`,
       );
 
+      // Build timeline for response
+      const responseTimeline = [
+        {
+          event: "SOS Triggered",
+          timestamp: activatedAt.toISOString(),
+        },
+      ];
+
+      if (trustedContacts.length > 0) {
+        responseTimeline.push({
+          event: "Trusted Contacts Notified",
+          timestamp: notifiedAt.toISOString(),
+          status: statusFor(trustedResults),
+          count: trustedContacts.length,
+        });
+      }
+
+      if (securityContacts.length > 0) {
+        responseTimeline.push({
+          event: "Campus Security Notified",
+          timestamp: notifiedAt.toISOString(),
+          status: statusFor(securityResults),
+          count: securityContacts.length,
+        });
+      }
+
+      responseTimeline.push({
+        event: "Location Tracking Started",
+        timestamp: activatedAt.toISOString(),
+      });
+
       return {
         success: true,
         alertId: alert._id,
         status: alert.status,
+        message: FIXED_MESSAGE,
         contactsNotified: notifications,
         deliveredCount,
         totalCount,
-        message: `Alert sent to ${deliveredCount} of ${totalCount} recipients`,
+        responseTimeline,
+        summary: `Alert sent to ${deliveredCount} of ${totalCount} recipients`,
       };
     } catch (error) {
       logger.error("SOS trigger error:", error);
@@ -219,7 +302,8 @@ class SOSService {
   }
 
   /**
-   * Cancel an SOS alert
+   * Cancel an SOS alert. Must happen within the 5-minute cancellation
+   * window.
    */
   async cancelSOS(alertId, userId, reason = "false_alarm") {
     try {
@@ -246,10 +330,18 @@ class SOSService {
         throw error;
       }
 
+      const finalStatus =
+        reason === "false_alarm" ? "false_alarm" : "cancelled";
+      const cancelledAt = new Date();
+
       // Update alert
-      alert.status = "cancelled";
-      alert.cancelledAt = new Date();
+      alert.status = finalStatus;
+      alert.cancelledAt = cancelledAt;
       alert.cancellationReason = reason;
+      alert.resolvedAt = cancelledAt;
+      alert.resolvedBy = "user";
+      alert.resolutionReason = reason;
+      alert.addTimelineEvent(finalStatus, "completed", cancelledAt);
       await alert.save();
 
       // Send cancellation notification
@@ -260,7 +352,7 @@ class SOSService {
         const contacts = recipients.map((r) => ({
           email: r.email,
           name: r.name,
-          relationship: r.recipientType,
+          relationship: r.relationship,
           type: r.recipientType,
         }));
 
@@ -288,7 +380,9 @@ class SOSService {
         );
       }
 
-      logger.info(`SOS alert ${alertId} cancelled by user ${userId}`);
+      logger.info(
+        `SOS alert ${alertId} marked ${finalStatus} by user ${userId}`,
+      );
 
       return {
         success: true,
@@ -298,6 +392,54 @@ class SOSService {
       };
     } catch (error) {
       logger.error("SOS cancellation error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Resolve an SOS alert - a real response occurred
+   */
+  async resolveSOS(
+    alertId,
+    userId,
+    { resolvedBy = "user", resolutionReason } = {},
+  ) {
+    try {
+      const alert = await SOSAlert.findOne({ _id: alertId, userId });
+
+      if (!alert) {
+        const error = new Error("Alert not found");
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (alert.status !== "sent") {
+        const error = new Error(
+          `Alert cannot be resolved (status: ${alert.status})`,
+        );
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const resolvedAt = new Date();
+
+      alert.status = "resolved";
+      alert.resolvedAt = resolvedAt;
+      alert.resolvedBy = resolvedBy;
+      alert.resolutionReason = resolutionReason || null;
+      alert.addTimelineEvent("resolved", "completed", resolvedAt);
+      await alert.save();
+
+      logger.info(`SOS alert ${alertId} resolved (by: ${resolvedBy})`);
+
+      return {
+        success: true,
+        alertId: alert._id,
+        status: alert.status,
+        message: "Alert resolved successfully",
+      };
+    } catch (error) {
+      logger.error("SOS resolution error:", error);
       throw error;
     }
   }
@@ -316,7 +458,7 @@ class SOSService {
 
       const alerts = await SOSAlert.find(query)
         .select(
-          "status createdAt latitude longitude locationAvailable locationLink cancelledAt cancellationReason",
+          "status createdAt latitude longitude locationAvailable locationLink locationLabel universityName cancelledAt cancellationReason resolvedAt resolvedBy resolutionReason message timeline",
         )
         .sort({ createdAt: -1 })
         .skip(offset)
@@ -341,6 +483,28 @@ class SOSService {
         recipientStats.map((stat) => [stat._id.toString(), stat]),
       );
 
+      // Get detailed recipient info for each alert
+      const recipientsByAlert = await AlertRecipient.aggregate([
+        { $match: { alertId: { $in: alertIds } } },
+        {
+          $group: {
+            _id: "$alertId",
+            recipients: {
+              $push: {
+                name: "$name",
+                email: "$email",
+                relationship: "$relationship",
+                delivered: "$delivered",
+                emailStatus: "$emailStatus",
+              },
+            },
+          },
+        },
+      ]);
+      const recipientsMap = new Map(
+        recipientsByAlert.map((item) => [item._id.toString(), item.recipients]),
+      );
+
       return {
         alerts: alerts.map((alert) => {
           const stats = statsByAlertId.get(alert._id.toString()) || {
@@ -348,10 +512,32 @@ class SOSService {
             delivered: 0,
           };
 
+          const endTime = alert.resolvedAt || alert.cancelledAt || null;
+          const durationMs = endTime
+            ? Math.max(
+                0,
+                new Date(endTime).getTime() -
+                  new Date(alert.createdAt).getTime(),
+              )
+            : null;
+
+          // Build timeline from the alert's timeline array
+          const timelineEvents = alert.timeline || [];
+          const responseTimeline = timelineEvents.map((event) => ({
+            event: event.event,
+            timestamp: event.timestamp,
+            status: event.status,
+          }));
+
+          // Get recipients for this alert
+          const recipients = recipientsMap.get(alert._id.toString()) || [];
+
           return {
             id: alert._id,
             status: alert.status,
             timestamp: alert.createdAt,
+            universityName: alert.universityName,
+            locationLabel: alert.locationLabel,
             location: alert.locationAvailable
               ? {
                   latitude: alert.latitude,
@@ -360,10 +546,26 @@ class SOSService {
                 }
               : null,
             locationLink: alert.locationLink,
+            message: alert.message,
+            resolvedAt: alert.resolvedAt,
+            resolvedBy: alert.resolvedBy,
+            resolutionReason: alert.resolutionReason,
             cancelledAt: alert.cancelledAt,
             cancellationReason: alert.cancellationReason,
-            recipients: stats.total,
-            delivered: stats.delivered,
+            durationMs,
+            recipients: recipients.map((r) => ({
+              name: r.name,
+              email: r.email,
+              relationship: r.relationship,
+              delivered: r.delivered,
+              status: r.delivered ? "sent" : "failed",
+            })),
+            recipientStats: {
+              total: stats.total,
+              delivered: stats.delivered,
+              failed: stats.total - stats.delivered,
+            },
+            responseTimeline,
           };
         }),
         total,
@@ -390,29 +592,70 @@ class SOSService {
       }
 
       const recipients = await AlertRecipient.find({ alertId }).select(
-        "recipientType name email delivered emailStatus emailSentAt",
+        "recipientType name email relationship delivered emailStatus emailSentAt",
       );
+
+      const endTime = alert.resolvedAt || alert.cancelledAt || null;
+      const durationMs = endTime
+        ? Math.max(
+            0,
+            new Date(endTime).getTime() - new Date(alert.createdAt).getTime(),
+          )
+        : null;
+
+      // Build response timeline from alert.timeline
+      const responseTimeline = (alert.timeline || []).map((event) => ({
+        event: event.event,
+        status: event.status,
+        timestamp: event.timestamp,
+      }));
 
       return {
         id: alert._id,
         status: alert.status,
         timestamp: alert.createdAt,
+        universityName: alert.universityName,
+        locationLabel: alert.locationLabel,
         location: {
           latitude: alert.latitude,
           longitude: alert.longitude,
           available: alert.locationAvailable,
         },
         locationLink: alert.locationLink,
+        durationMs,
+        message: alert.message,
+
+        // Response Timeline section
+        responseTimeline,
+
+        // Trusted Contacts section with delivery status
         contactsNotified: recipients.map((r) => ({
           type: r.recipientType,
           name: r.name,
+          relationship: r.relationship,
           email: r.email,
           delivered: r.delivered,
+          status: r.delivered ? "sent" : "failed",
           emailStatus: r.emailStatus,
           emailSentAt: r.emailSentAt,
         })),
+
+        // Resolution Summary section
+        resolutionSummary: endTime
+          ? {
+              startTime: alert.createdAt,
+              endTime,
+              durationMs,
+              resolvedBy: alert.resolvedBy,
+              resolutionReason: alert.resolutionReason,
+            }
+          : null,
+
         cancelledAt: alert.cancelledAt,
         cancellationReason: alert.cancellationReason,
+        resolvedAt: alert.resolvedAt,
+        resolvedBy: alert.resolvedBy,
+        resolutionReason: alert.resolutionReason,
         canCancel: alert.canCancel(),
         cancellationTimeRemaining: alert.getCancellationTimeRemaining(),
       };

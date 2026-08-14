@@ -38,8 +38,8 @@ export function alertLayout({
         ${baseResetCSS}
         body { background-color: #f5f5f5; padding: 20px; }
         .container { max-width: 600px; width: 100%; box-sizing: border-box; margin: 0 auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow: hidden; }
-        .brand-row { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; color: ${BRAND.teal}; padding: 22px 20px 0; }
-        .brand-row img.icon { width: ${LOGO_WIDTH}px; height: ${LOGO_HEIGHT}px; vertical-align: middle; }
+        .brand-row { display: flex; align-items: center; justify-content: center; padding: 22px 20px 0; }
+        .brand-row img.icon { width: ${LOGO_WIDTH}px; height: auto; max-width: 100%; display: block; margin: 0 auto; }
         .header { background: ${headerBg}; color: #ffffff; padding: 26px 20px; text-align: center; margin-top: 18px; }
         .header h1 { margin: 0; font-size: 26px; }
         .header .sub { font-size: 15px; opacity: 0.92; margin-top: 8px; }
@@ -73,7 +73,7 @@ export function alertLayout({
     </head>
     <body>
       <div class="container">
-        <div class="brand-row"><img src="${LOGO_BASE64_PNG}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${BRAND.name}" class="icon" /> ${BRAND.name}</div>
+        <div class="brand-row"><img src="${LOGO_BASE64_PNG}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${BRAND.name}" class="icon" /></div>
         <div class="header">
           <h1>${headerIcon} ${headerTitle}</h1>
           <div class="sub">${headerSubtitle}</div>

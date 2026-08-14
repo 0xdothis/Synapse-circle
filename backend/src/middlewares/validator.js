@@ -234,13 +234,36 @@ export const sosValidation = {
       .optional()
       .isBoolean()
       .withMessage("locationAvailable must be boolean"),
+    body("locationLabel")
+      .optional()
+      .isString()
+      .withMessage("locationLabel must be a string")
+      .isLength({ max: 200 })
+      .withMessage("locationLabel cannot exceed 200 characters"),
   ],
 
   cancel: [
     body("reason")
       .optional()
-      .isIn(["false_alarm", "resolved", "user_error"])
+      .isIn(["false_alarm", "user_error", "other"])
       .withMessage("Invalid cancellation reason"),
+  ],
+
+  /** A real response occurred (e.g. campus security responded), as opposed
+   * to the user self-cancelling. Not subject to the 5-minute cancellation
+   * window that /cancel enforces, so no time-based validation here.
+   */
+  resolve: [
+    body("resolvedBy")
+      .optional()
+      .isIn(["user", "campus_security", "admin", "system"])
+      .withMessage("Invalid resolvedBy value"),
+    body("resolutionReason")
+      .optional()
+      .isString()
+      .withMessage("Resolution reason must be a string")
+      .isLength({ max: 500 })
+      .withMessage("Resolution reason cannot exceed 500 characters"),
   ],
 };
 
