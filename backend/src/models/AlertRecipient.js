@@ -30,6 +30,10 @@ const alertRecipientSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    relationship: {
+      type: String,
+      required: true,
+    },
     emailStatus: {
       type: String,
       enum: ["pending", "sent", "delivered", "failed"],

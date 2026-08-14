@@ -73,8 +73,9 @@ router.post(
  *             properties:
  *               reason:
  *                 type: string
- *                 enum: [false_alarm, resolved, user_error]
+ *                 enum: [false_alarm, user_error, other]
  *                 default: false_alarm
+ *                 description: "false_alarm produces a distinct 'false_alarm' status from a generic 'cancelled'"
  *     responses:
  *       200:
  *         description: Alert cancelled successfully
@@ -109,6 +110,67 @@ router.post(
 
 /**
  * @swagger
+ * /api/sos/resolve/{alertId}:
+ *   post:
+ *     summary: Resolve an SOS alert
+ *     description: Marks an alert as resolved (a real response occurred). Unlike /cancel, this is not restricted to a 5-minute window.
+ *     tags: [SOS Alerts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: alertId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Alert ID to resolve
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               resolvedBy:
+ *                 type: string
+ *                 enum: [user, campus_security, admin, system]
+ *                 default: user
+ *               resolutionReason:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Alert resolved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 alertId:
+ *                   type: string
+ *                 status:
+ *                   type: string
+ *                   example: resolved
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Alert cannot be resolved (already terminal)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Alert not found
+ */
+router.post(
+  "/resolve/:alertId",
+  authenticate,
+  validate(sosValidation.resolve),
+  asyncHandler(sosController.resolveSOS),
+);
+
+/**
+ * @swagger
  * /api/sos/history:
  *   get:
  *     summary: Get alert history
@@ -133,7 +195,7 @@ router.post(
  *         name: status
  *         schema:
  *           type: string
- *           enum: [sent, cancelled, failed, resolved]
+ *           enum: [sent, resolved, false_alarm, cancelled, failed]
  *         description: Filter by alert status
  *     responses:
  *       200:
@@ -216,7 +278,7 @@ router.get(
  *                   example: true
  *                 status:
  *                   type: string
- *                   enum: [sent, cancelled, failed, resolved]
+ *                   enum: [sent, resolved, false_alarm, cancelled, failed]
  *                 canCancel:
  *                   type: boolean
  *                 cancellationTimeRemaining:

@@ -5,12 +5,18 @@ import SOSAlert from "../models/SOSAlert.js";
  * POST /api/sos/trigger
  */
 const triggerSOS = async (req, res) => {
-  const { latitude, longitude, locationAvailable = true } = req.body;
+  const {
+    latitude,
+    longitude,
+    locationAvailable = true,
+    locationLabel,
+  } = req.body;
 
   const result = await sosService.triggerSOS(req.userId, {
     latitude,
     longitude,
     locationAvailable,
+    locationLabel,
   });
 
   res.status(200).json({
@@ -21,12 +27,34 @@ const triggerSOS = async (req, res) => {
 
 /**
  * POST /api/sos/cancel/:alertId
+ * User self-cancel, within the 5-minute window. reason: "false_alarm"
+ * produces a distinct status from a generic cancel.
  */
 const cancelSOS = async (req, res) => {
   const { alertId } = req.params;
   const { reason = "false_alarm" } = req.body;
 
   const result = await sosService.cancelSOS(alertId, req.userId, reason);
+
+  res.status(200).json({
+    success: true,
+    ...result,
+  });
+};
+
+/**
+ * POST /api/sos/resolve/:alertId
+ * A real response occurred (e.g. campus security responded). Distinct
+ * from cancelSOS - not subject to the 5-minute cancellation window.
+ */
+const resolveSOS = async (req, res) => {
+  const { alertId } = req.params;
+  const { resolvedBy = "user", resolutionReason } = req.body;
+
+  const result = await sosService.resolveSOS(alertId, req.userId, {
+    resolvedBy,
+    resolutionReason,
+  });
 
   res.status(200).json({
     success: true,
@@ -97,6 +125,7 @@ const getStatus = async (req, res) => {
 export default {
   triggerSOS,
   cancelSOS,
+  resolveSOS,
   getHistory,
   getHistoryEntry,
   getStatus,

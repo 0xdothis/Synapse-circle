@@ -1,4 +1,4 @@
-import { FONT_STACK, BRAND, RESPONSIVE_BREAKPOINT } from "./theme.js";
+import { BRAND, RESPONSIVE_BREAKPOINT } from "./theme.js";
 import { baseResetCSS, footerCSS, footer } from "./components.js";
 import { LOGO_BASE64_PNG, LOGO_WIDTH, LOGO_HEIGHT } from "./logo.js";
 
@@ -25,9 +25,9 @@ export function cardLayout({
         ${baseResetCSS}
         body { background-color: #f4f6f5; padding: 20px; }
         .container { max-width: ${maxWidth}; width: 100%; box-sizing: border-box; margin: 0 auto; background-color: #ffffff; border-radius: 12px; padding: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
-        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 30px; }
-        .brand { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; color: ${BRAND.teal}; }
-        .brand img.icon { width: 22px; height: 28px; vertical-align: middle; }
+        .header { display: flex; align-items: center; justify-content: center; margin-bottom: 30px; }
+        .brand { display: flex; align-items: center; justify-content: center; width: 100%; }
+        .brand img.icon { width: ${LOGO_WIDTH}px; height: auto; max-width: 100%; display: block; margin: 0 auto; }
         .eyebrow { color: #9aa1a0; font-size: 12px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
         ${footerCSS}
         .footer { border-top: 1px solid #eef1f0; background: transparent; padding: 20px 0 0; margin-top: 30px; text-align: left; }
@@ -45,7 +45,7 @@ export function cardLayout({
     <body>
       <div class="container">
         <div class="header">
-          <div class="brand"><img src="${LOGO_BASE64_PNG}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${BRAND.name}" class="icon" /> ${BRAND.name}</div>
+          <div class="brand"><img src="${LOGO_BASE64_PNG}" width="${LOGO_WIDTH}" height="${LOGO_HEIGHT}" alt="${BRAND.name}" class="icon" /></div>
           ${eyebrow ? `<div class="eyebrow">${eyebrow}</div>` : ""}
         </div>
         ${bodyHtml}
