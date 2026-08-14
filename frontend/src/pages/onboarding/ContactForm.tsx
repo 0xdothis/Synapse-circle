@@ -8,6 +8,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import Loader from "@/components/Loader"
 import { trackEvent } from "@/lib/mixpanelClient";
+import { toast } from "sonner";
 
 
 
@@ -17,6 +18,7 @@ function ContactForm() {
 
   const contacts = useOnboardingStore(state => state.onboardingData.contacts)
   const addContactSlot = useOnboardingStore((state) => state.addContactSlot)
+  const handleContactChange = useOnboardingStore(state => state.handleContactChange)
   const removeContactSlot = useOnboardingStore(state => state.removeContactSlot);
 
   const { isPending, mutate } = useMutation({
@@ -24,11 +26,13 @@ function ContactForm() {
     onSuccess: (data) => {
 
       if (!data.success) {
+        toast.error(data.message)
         return
 
       }
 
       trackEvent("contact_added")
+      toast.success("Emergency Contact Added ✅ ")
 
       console.log(data)
       navigate("/onboarding/school-info")
@@ -73,13 +77,13 @@ function ContactForm() {
         <p className="text-neutral-700 text-sm">Add up to 3 emergency contacts. They'll be notified immediately when you activate SOS.</p>
       </div>
       <form className="space-y-6" onSubmit={handleSubmitContacts}>
-        {contacts.map((_, index) => (
+        {contacts.map((contact, index) => (
           <div key={index} className="space-y-4 flex flex-col">
             {contacts.length > 1 && <a onClick={() => removeContactSlot(index)} className="rounded-lg h-12 w-12 p-0 text-error cursor-pointer self-end relative top-15 right-5">
               Remove
             </a>}
 
-            <EmergencyContact index={index} />
+            <EmergencyContact index={index} contact={contact} onChange={(updated) => handleContactChange(index, updated)} />
           </div>
         ))}
 

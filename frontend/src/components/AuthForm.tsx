@@ -28,7 +28,7 @@ function AuthForm({ title, description, CTA, onSubmit, isValid, className, isSig
   return (
     <section className={cn("pt-5 flex flex-1 flex-col justify-between", className)}>
 
-      <Button className="self-start gap-2 -ml-8" variant="ghost" onClick={() => navigate(-1)}><HugeiconsIcon icon={ArrowLeft02Icon} /> Back</Button>
+      <Button className="self-start gap-2 -ml-8" variant="ghost" onClick={() => navigate("/signup")}><HugeiconsIcon icon={ArrowLeft02Icon} /> Back</Button>
       <form className=" flex-2 flex flex-col space-y-14 justify-center" onSubmit={onSubmit}>
         <FieldSet className="w-full">
           <FieldLegend>{title}</FieldLegend>

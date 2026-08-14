@@ -3,7 +3,6 @@ import SearchHeader from "@/components/dashboard/SearchHeader";
 import { Input } from "@/components/ui/input"
 import { cn } from "@/utils";
 import { Search01Icon } from "@hugeicons/core-free-icons";
-import { alerts } from "@/components/dashboard/data";
 import SearchNotFound from "@/components/dashboard/SearchNotFound";
 import AlertItems from "@/components/dashboard/AlertItems";
 import {
@@ -18,8 +17,10 @@ import {
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { alertHistory } from "@/utils/safewalkFn";
 import { FullSpinner } from "@/components/Loader"
+import AlertEmpty from "@/components/dashboard/AlertEmpty";
+import { timeData } from "@/utils/formatTime";
 
-const FILTERS = ["All", "Resolved", "False Alarm"] as const;
+const FILTERS = ["All", "Resolved", "False Alarm", "Cancelled"] as const;
 type Filter = (typeof FILTERS)[number];
 const items = [
   { label: "Sort: Newest First", value: "newest" },
@@ -35,33 +36,6 @@ export default function Alert() {
   const [sortedData, setSortedData] = React.useState<SortValue>("newest")
   const [activeFilter, setActiveFilter] = React.useState<Filter>("All");
 
-  const filteredByPill = React.useMemo(() => {
-    switch (activeFilter) {
-      case "Resolved":
-        return alerts.filter((alert) => alert.tag.toLowerCase().includes("resolved"));
-      case "False Alarm":
-        return alerts.filter((alert) => alert.tag.toLowerCase().includes("false alarm"));
-      case "All":
-      default:
-        return alerts;
-    }
-  }, [alerts, activeFilter]);
-
-  // 2. sort — applied to the pill-filtered set, respects the dropdown
-  const sortedAlerts = React.useMemo(() => {
-    return [...filteredByPill].sort((a, b) =>
-      sortedData === "newest"
-        ? new Date(b.duration).getTime() - new Date(a.duration).getTime()
-        : new Date(a.duration).getTime() - new Date(b.duration).getTime()
-    );
-  }, [filteredByPill, sortedData]);
-
-  // 3. search — scoped to pill-filtered + sorted, mirrors HospitalDirectory's searchedHospitals
-  const searchedAlerts = React.useMemo(() => {
-    if (!search.trim()) return [];
-    const q = search.toLowerCase();
-    return sortedAlerts.filter((a) => a.school.toLowerCase().includes(q));
-  }, [sortedAlerts, search]);
 
 
   const { data, isPending } = useSuspenseQuery({
@@ -74,18 +48,56 @@ export default function Alert() {
 
     if (value === null) return;
 
-
     setSortedData(value)
 
   }
+
+  const filteredByPill = React.useMemo(() => {
+    switch (activeFilter) {
+      case "Resolved":
+        return data.alerts.filter((alert) => alert.cancellationReason?.toLowerCase() === ("resolved"));
+      case "False Alarm":
+        return data.alerts.filter((alert) => alert.cancellationReason?.toLowerCase() === "false_alarm");
+      case "Cancelled":
+        return data.alerts.filter((alert) => alert.cancellationReason?.toLowerCase() === ("user_error"));
+      case "All":
+      default:
+        return data.alerts;
+    }
+  }, [data.alerts, activeFilter]);
+
+  // 2. sort — applied to the pill-filtered set, respects the dropdown
+  const sortedAlerts = React.useMemo(() => {
+    return [...filteredByPill].sort((a, b) =>
+      sortedData === "newest"
+        ? b.durationMs - a.durationMs
+        : a.durationMs - b.durationMs
+    );
+  }, [filteredByPill, sortedData]);
+
+  // 3. search — scoped to pill-filtered + sorted, mirrors HospitalDirectory's searchedHospitals
+  const searchedAlerts = React.useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase();
+    return sortedAlerts.filter((a) => timeData(a.cancelledAt).toLowerCase().includes(q));
+  }, [sortedAlerts, search]);
+
 
   if (isPending) {
     return <FullSpinner />
   }
 
-  if (data) {
-    console.log(data)
+  if (data.alerts.length === 0) {
+
+    return (
+      <SearchHeader title="Alert History">
+        <AlertEmpty />
+      </SearchHeader>
+    )
+
   }
+
+
 
 
   return (
@@ -131,7 +143,7 @@ export default function Alert() {
         {
           search && searchedAlerts.length > 0 &&
           <div className="space-y-3">
-            < AlertItems data={data.alerts} />
+            < AlertItems data={searchedAlerts} />
           </div>
 
         }
@@ -142,7 +154,7 @@ export default function Alert() {
 
           <div className="space-y-3">
 
-            <AlertItems data={data.alerts} />
+            <AlertItems data={sortedAlerts} />
           </div>
 
 

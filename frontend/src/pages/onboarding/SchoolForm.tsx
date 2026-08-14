@@ -16,6 +16,7 @@ import { useOnboardingStore } from "@/store/useOnboardingStore"
 import { useMutation } from "@tanstack/react-query"
 import { onboardingRegistration } from "@/utils/safewalkFn"
 import { trackEvent } from "@/lib/mixpanelClient"
+import { toast } from "sonner"
 
 const schools = nigerianTertiarySchools
 
@@ -55,11 +56,14 @@ function SchoolForm() {
     onSuccess: (data) => {
 
       if (!data.success) {
+        toast.error(data.message)
         return
 
       }
 
       trackEvent("university_added")
+
+      toast.success("University Added ✅")
 
       console.log(data)
       navigate("/dashboard", { replace: true })
@@ -73,7 +77,6 @@ function SchoolForm() {
 
 
   function handleSubmitSchool() {
-
 
     if (institution?.name.trim() === "") {
       return;

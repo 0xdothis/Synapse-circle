@@ -4,7 +4,7 @@ import { useNavigate } from "react-router";
 
 
 
-function DetailsTemplate() {
+function DetailsTemplate({ title }: { title: string }) {
 
   const navigate = useNavigate()
 
@@ -13,7 +13,7 @@ function DetailsTemplate() {
     <div className="flex flex-col flex-1 sticky bg-neutral-50 w-full py-6 top-0 z-50 border-b border-b-neutral-200">
       <button className="flex gap-2 text-neutral-900" onClick={() => navigate(-1)}>
         <HugeiconsIcon icon={ArrowLeft02Icon} />
-        <p className="text-neutral-700 font-semibold">Hospital Details</p>
+        <p className="text-neutral-700 font-semibold">{title}</p>
       </button>
     </div>
   )

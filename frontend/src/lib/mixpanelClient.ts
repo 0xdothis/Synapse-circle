@@ -12,7 +12,6 @@ export const initMixpanel = () => {
 
   mixpanel.init(MIXPANEL_TOKEN, {
     debug: import.meta.env.DEV,
-    autocapture: true,
     persistence: "localStorage",
     api_host: "https://api-eu.mixpanel.com"
   })

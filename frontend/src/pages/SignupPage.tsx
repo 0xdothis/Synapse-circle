@@ -8,14 +8,48 @@ import { GoogleLogin, type CredentialResponse } from "@react-oauth/google"
 import Loader from "@/components/Loader"
 import { useMutation } from "@tanstack/react-query"
 import { loginWithGoogle } from "@/utils/safewalkFn"
+import { trackEvent } from "@/lib/mixpanelClient"
+import { toast } from "sonner"
+import { useAuthStore } from "@/store/useAuthStore"
 
 function SignupPage() {
   const navigate = useNavigate()
+  const signup = useAuthStore(store => store.signup);
+  const login = useAuthStore(state => state.login)
 
-  const { isPending, mutate, error } = useMutation({
+  const { isPending, mutate } = useMutation({
     mutationFn: loginWithGoogle,
     onSuccess: (data) => {
-      console.log(data)
+      if (!data.success) {
+        trackEvent("google_account_creation_failed")
+        return;
+      }
+
+      const token = data.accessToken;
+      const isVerified = data.user?.isVerified!;
+      const isNewUser = data.isNewUser
+      console.log(isVerified)
+
+      if (token && !isVerified) {
+        signup(token, data.user.email, isVerified)
+        toast.success("Account created successfully")
+        trackEvent("google_signup_completed")
+
+      }
+
+      if (!isNewUser) {
+        login(token, isVerified)
+        toast.success("Login successfully")
+        trackEvent("google_login_completed")
+
+      }
+
+      if (data.user.onboardingStep === "welcome" || data.user.onboardingStep === "location" || data.user.location === "contact") {
+        return navigate("/onboarding", { replace: true })
+      }
+
+      navigate("/dashboard", { replace: true })
+
     },
     onError: (error) => {
       console.error("backend authentication failed", error)
@@ -34,10 +68,6 @@ function SignupPage() {
 
   if (isPending) {
     return <Loader heading="Connecting with your Google Account" description="Setting up your safety environment" />
-  }
-
-  if (error) {
-    console.log("[TANSTACK ERROR]", error)
   }
 
 

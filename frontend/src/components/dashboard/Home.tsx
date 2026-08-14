@@ -9,31 +9,70 @@ import { triggerSOS, userProfile } from "@/utils/safewalkFn"
 import { useOnboardingStore } from "@/store/useOnboardingStore"
 import useLocation from "@/utils/hooks/useLocation"
 import { trackEvent } from "@/lib/mixpanelClient"
+import { useGreeting } from "@/utils/hooks/useGreeting"
+import { toast } from "sonner"
+import React from "react"
+import { clearAuth } from "@/lib/authStorage"
+import type { ContactDTO } from "@/types"
+import { useAlertStore } from "@/store/useAlertStore"
+
+
+
+
 
 function Home() {
   const navigate = useNavigate()
   const updateLocation = useOnboardingStore(state => state.updateLocation);
   const { location, getLocation } = useLocation();
+  const greeting = useGreeting();
+  const setActiveAlertId = useAlertStore(state => state.setActiveAlertId)
 
-  const { data: { profile } } = useSuspenseQuery({
+  const { data } = useSuspenseQuery({
     queryKey: ["getUser"],
     queryFn: userProfile
   })
+
+  React.useEffect(() => {
+
+    if (!data.success) {
+
+      if (data.code === "USER_NOT_FOUND") {
+
+        toast.error(data.message)
+        clearAuth()
+      }
+    }
+
+
+  }, [data])
+
+  if (!data.success) {
+    return null;
+  }
+
+  const { profile } = data
 
 
   const { mutate } = useMutation({
     mutationFn: triggerSOS,
     onSuccess: (data) => {
 
-      console.log(data)
+      if (!data.success) {
+        console.log("ERROR", data)
+      }
+
+      console.log("[TRIGGER]", data.alertId)
 
       trackEvent("alert_delivery_confirmed")
-      navigate("countdown", { state: { id: data.alertId } })
+      toast.success("SOS Alert Sent")
+
+      setActiveAlertId(data.alertId)
+      navigate("countdown")
       trackEvent("alert_dispatched")
 
     },
     onError: (err) => {
-      console.log(err)
+      console.log("ERROR", err)
     }
   })
 
@@ -61,19 +100,14 @@ function Home() {
     mutate({ latitude: coords.lat, longitude: coords.lng, locationAvailable: true })
   }
 
-  if (!profile) {
 
-    return;
-  }
-
-  console.log(profile)
 
 
 
 
   return (
     <section className="relative pt-4 pb-16">
-      <Header title={profile.university} caption="Good Evening, " name={profile.name.split(" ")[0]}
+      <Header title={profile.university} caption={greeting} name={profile.name} imageUrl={profile.profilePicture}
       />
       <div className="mt-22 scroll-mt-20 mb-5">
         <div>
@@ -93,9 +127,9 @@ function Home() {
                 <a className="text-sm font-semibold text-neutral-700 inline-flex items-center gap-2">View Details <HugeiconsIcon icon={ArrowRight01Icon} size={16} /></a>
               </div>
               <div className="bg-white p-3 rounded-lg shadow-md space-y-1.5">
-                <h3 className="font-semibold text-neutral-900">Campus Security</h3>
-                <small className="block text-neutral-600 text-sm">Institution Security Office</small>
-                <a className="text-sm font-semibold text-neutral-700 inline-flex items-center gap-2">View Details <HugeiconsIcon icon={ArrowRight01Icon} size={16} /></a>
+                <h3 className="font-semibold text-neutral-900">Alert History</h3>
+                <small className="block text-neutral-600 text-sm">Review previous emergency alerts.</small>
+                <a onClick={() => navigate("history")} className="text-sm font-semibold text-neutral-700 inline-flex items-center gap-2">View Details <HugeiconsIcon icon={ArrowRight01Icon} size={16} /></a>
               </div>
             </div>
             <div className="flex justify-between items-center mb-2">
@@ -104,21 +138,14 @@ function Home() {
             </div>
           </div>
           <div className="">
-            <div className="py-2 flex items-center justify-between border-b border-b-neutral-100">
-              <div className="">
-                <p className="font-semibold text-neutral-900 text-xs">Adeyemi Olamide</p>
-                <p className="text-xs text-neutral-600">Parent</p>
+            {profile.trustedContacts.map((contact: ContactDTO) => (<div className="py-2 flex items-center justify-between border-b border-b-neutral-100" key={contact.phoneNumber}>
+              <div>
+                <p className="font-semibold text-neutral-900 text-xs">{contact.name}</p>
+                <p className="text-xs text-neutral-600">{contact.relationship}</p>
               </div>
-              <p className="text-neutral-900 text-sm">+234 803 456 7890</p>
-            </div>
+              <p className="text-neutral-900 text-sm">{contact.phoneNumber}</p>
+            </div>))}
 
-            <div className="py-2 flex items-center justify-between">
-              <div className="">
-                <p className="font-semibold text-neutral-900 text-xs">Adeyemi Olamide</p>
-                <p className="text-xs text-neutral-600">Parent</p>
-              </div>
-              <p className="text-neutral-900 text-sm">+234 803 456 7890</p>
-            </div>
 
           </div>
         </div>

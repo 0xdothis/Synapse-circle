@@ -1,27 +1,33 @@
 import Header from "@/components/dashboard/Header"
 import Button from "@/components/ui/button"
 import { trackEvent } from "@/lib/mixpanelClient";
+import { useAlertStore } from "@/store/useAlertStore";
 import { cancelAlert } from "@/utils/safewalkFn";
 import { useMutation } from "@tanstack/react-query";
 import React from "react"
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
 
 
 function CountDown() {
   const [timer, setTimer] = React.useState(10);
   const navigate = useNavigate();
-  const { state } = useLocation()
+  const activeAlertId = useAlertStore(state => state.activeAlertId)
+  const clearActiveAlertId = useAlertStore(state => state.clearActiveAlertId)
+
   const { mutate, isPending } = useMutation({
     mutationFn: cancelAlert,
     onSuccess: (data) => {
-      console.log(data)
+      console.log("[CANCEL ALERT]", data)
+
+      clearActiveAlertId();
+      toast.info(data.message)
 
       navigate("/dashboard/emergency-cancelled")
     },
     onError: (err) => {
       console.error(err)
     }
-
   })
 
   React.useEffect(() => {
@@ -40,8 +46,14 @@ function CountDown() {
   }, [timer])
 
   function handleCancelAlert() {
+
+    if (!activeAlertId) {
+      return;
+    }
+
     trackEvent("alert_cancelled")
-    mutate({ id: state.id, reason: "user_error" })
+
+    mutate({ id: activeAlertId, reason: "user_error" })
   }
   return (
     <section className="relative pt-4 pb-16 flex flex-col flex-1 min-h-screen items-center">
