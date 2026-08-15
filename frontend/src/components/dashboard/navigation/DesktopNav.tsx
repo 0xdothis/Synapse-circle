@@ -1,13 +1,71 @@
 import Logo from "@/components/navigation/Logo"
 import { HugeiconsIcon } from "@hugeicons/react";
-import { NavLink } from "react-router"
+import { NavLink, useNavigate } from "react-router"
 import { deskstopLinks } from "./navLinks"
 import { LogoutIcon } from "@hugeicons/core-free-icons";
+import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
+import { logout, userProfile } from "@/utils/safewalkFn";
+import { FullSpinner } from "@/components/Loader";
+import { getInitials } from "@/utils/getInitials";
+import { useAuthStore } from "@/store/useAuthStore";
+import { toast } from "sonner";
+import { clearAuth } from "@/lib/authStorage";
+import { trackEvent } from "@/lib/mixpanelClient";
 
 
 
 
 function DesktopNav() {
+  const navigate = useNavigate()
+  const token = useAuthStore(state => state.token)
+
+
+  const { data, isPending } = useSuspenseQuery({
+    queryKey: ["getUser"],
+    queryFn: userProfile
+  })
+
+  const { mutate: userLogout } = useMutation({
+    mutationFn: logout,
+    onSuccess: (data) => {
+
+      if (!data.success) {
+        toast.error(data.message)
+        return;
+      }
+
+      trackEvent("user_logout")
+
+      clearAuth();
+
+      navigate(0)
+    },
+    onError: (err) => {
+      console.error(err)
+    }
+
+  })
+
+  function handleLogout() {
+    if (!token) {
+      return;
+    }
+
+    userLogout({ refreshToken: token });
+
+
+
+  }
+
+
+  if (isPending) {
+    return <FullSpinner />
+  }
+
+
+
+  const { profile } = data
+
 
 
 
@@ -30,12 +88,15 @@ function DesktopNav() {
 
         <div className=" flex justify-between items-center">
           <div className="flex items-center justify-center gap-4">
-            <div className="text-brand-500 bg-brand-100 rounded-full size-10 flex justify-center items-center">TA</div>
-            <p className="text-brand-500 font-medium">Tomi Adeyemi</p>
+            <div className="size-10 bg-brand-200 rounded-full flex aspect-video overflow-hidden justify-center items-center">
+              {profile.profilePicture ? <img src={`${profile.profilePicture}`} alt="user profile pictures" className="w-full object cover h-full" /> : <p className="font-bold text-brand-500">{getInitials(profile.name)}</p>}
+            </div>
+
+            <p className="text-brand-500 font-medium">{profile.name}</p>
           </div>
-          <div className="text-danger-500">
+          <button className="text-danger-500" onClick={handleLogout}>
             <HugeiconsIcon icon={LogoutIcon} size={20} />
-          </div>
+          </button>
         </div>
       </div>
       <div className="text-sm text-neutral-600 py-4 space-y-2 sticky bottom-0 border-t border-t-neutral-100">

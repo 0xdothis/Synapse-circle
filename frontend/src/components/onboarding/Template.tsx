@@ -28,7 +28,7 @@ function Template({ heading, description, image, icon, children }: TemplateProps
         </div>}
         <div className="space-y-3">
           <h3 className="text-2xl font-bold text-neutral-900">{heading}</h3>
-          <p className="text-base text-neutral-700">{heading === "Location Sharing Disabled" ? <>
+          <div className="text-base text-neutral-700">{heading === "Location Sharing Disabled" ? <>
             {description}
             <ul className="list-decimal list-inside">
               <li>Click "Enable Location" on the SafeWalk page</li>
@@ -38,7 +38,7 @@ function Template({ heading, description, image, icon, children }: TemplateProps
 
           </> : description}
 
-          </p>
+          </div>
         </div>
       </div>
 

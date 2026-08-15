@@ -30,7 +30,7 @@ function SchoolForm() {
   const navigate = useNavigate()
   const [institution, setInstitution] = React.useState<Institution | null>(null)
   const updateSchool = useOnboardingStore(state => state.handleUniversityChange)
-  //const newSchool = useOnboardingStore(state => state.onboardingData.selectedUniversity)
+
   const [touched, setTouched] = React.useState(false)
 
   function handleChangeInstitution(value: string | null) {
@@ -65,7 +65,7 @@ function SchoolForm() {
 
       toast.success("University Added ✅")
 
-      console.log(data)
+      //  console.log(data)
       navigate("/dashboard", { replace: true })
 
     },

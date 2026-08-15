@@ -14,6 +14,9 @@ import { DialogClose } from "@/components/ui/dialog"
 import EmergencyContact from "@/components/onboarding/EmergencyContact"
 import React from "react"
 import { getInitials } from "@/utils/getInitials"
+import { toast } from "sonner"
+import { clearAuth } from "@/lib/authStorage"
+import { trackEvent } from "@/lib/mixpanelClient"
 
 
 
@@ -33,7 +36,14 @@ export default function Profile() {
   const { mutate: userLogout } = useMutation({
     mutationFn: logout,
     onSuccess: (data) => {
-      console.log("[LOGOUT]", data)
+
+      if (!data.success) {
+        toast.error(data.message)
+        return;
+      }
+
+      trackEvent("user_logout")
+      clearAuth()
 
       navigate(0)
     },
@@ -54,6 +64,8 @@ export default function Profile() {
     if (!token) {
       return;
     }
+
+    toast.success("Logout Successful")
 
     userLogout({ refreshToken: token });
 

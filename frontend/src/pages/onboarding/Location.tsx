@@ -68,6 +68,9 @@ function Location() {
     const coords = location ?? (await getLocation())
 
     if (!coords) {
+      if (permissionStatus === "denied") {
+        toast.error("Location access is disabled. Enable it in your browser settings to continue")
+      }
       return;
     }
 
@@ -105,7 +108,7 @@ function Location() {
         getButtonText === "Allow Location Access" && Location06Icon ||
         LocationCheck02Icon}>
 
-      <Button onClick={handleLocation}> {isPending ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
+      <Button onClick={handleLocation} disabled={isPending}> {isPending ? <> <Spinner size="md" className="bg-neutral-50" /> <span className="inline-block ml-2"> Loading</span></> : getButtonText} </Button>
       {getButtonText === "Continue" ? undefined : <Modal trigger="Not Now" icon={AlertIcon} title="Are you sure?" description="Enable location access to share your real-time location with trusted contacts during emergencies.">
         <DialogClose render={<Button variant="ghost" onClick={() => navigate("/onboarding/trusted-contact")}>Continue Without Location</Button>} />
 
