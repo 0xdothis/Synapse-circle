@@ -8,7 +8,7 @@ export const protectedLoader = (customLoader?: LoaderFunction) => {
     const localToken = getToken();
 
     if (!localToken?.token) {
-      return redirect("/auth/login")
+      return redirect("/signup")
   }
 
     if(localToken?.isVerified) {
@@ -58,7 +58,7 @@ export const verifiedOnlyLoader = () => {
     }
 
     if(localToken === null) {
-      return redirect("/auth/login")
+      return redirect("/signup")
     }
 
       return null

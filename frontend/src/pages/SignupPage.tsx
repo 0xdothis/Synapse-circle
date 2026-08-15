@@ -19,18 +19,22 @@ function SignupPage() {
 
   const { isPending, mutate } = useMutation({
     mutationFn: loginWithGoogle,
+
     onSuccess: (data) => {
       if (!data.success) {
         trackEvent("google_account_creation_failed")
         return;
       }
 
+
+
       const token = data.accessToken;
       const isVerified = data.user?.isVerified!;
       const isNewUser = data.isNewUser
-      console.log(isVerified)
 
-      if (token && !isVerified) {
+
+      if (token && isVerified && isNewUser) {
+
         signup(token, data.user.email, isVerified)
         toast.success("Account created successfully")
         trackEvent("google_signup_completed")
@@ -41,10 +45,9 @@ function SignupPage() {
         login(token, isVerified)
         toast.success("Login successfully")
         trackEvent("google_login_completed")
-
       }
 
-      if (data.user.onboardingStep === "welcome" || data.user.onboardingStep === "location" || data.user.location === "contact") {
+      if (data.user.onboardingStep === "welcome" || data.user.onboardingStep === "location") {
         return navigate("/onboarding", { replace: true })
       }
 
@@ -59,7 +62,7 @@ function SignupPage() {
 
   function handleGoogleLogin(credential: CredentialResponse) {
 
-    console.log(credential.credential)
+
     if (credential.credential) {
       mutate(credential.credential)
     }

@@ -34,7 +34,7 @@ function ContactForm() {
       trackEvent("contact_added")
       toast.success("Emergency Contact Added ✅ ")
 
-      console.log(data)
+      // console.log(data)
       navigate("/onboarding/school-info")
 
     },

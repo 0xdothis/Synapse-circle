@@ -49,8 +49,6 @@ function SignUpVerification() {
         return;
       }
 
-      console.log(data)
-
       const token = data.accessToken;
       const isVerified = data.user?.isVerified!
 
