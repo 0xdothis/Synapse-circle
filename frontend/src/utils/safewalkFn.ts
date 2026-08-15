@@ -1,6 +1,6 @@
 
 import type { LoginCredentials } from "@/components/auth/login";
-import { clearAuth, getToken } from "@/lib/authStorage";
+import { getToken } from "@/lib/authStorage";
 import {alertHistorySchema, loginAuthResponseSchema, signupAuthResponseSchema, type AlertResponse, type ContactDTO, type LoginResponse, type signupDTO, type SignupResponse } from "@/types";
 
 const URL = import.meta.env.VITE_BACKEND_URL || "https://synap-circle.onrender.com/api"
@@ -41,9 +41,6 @@ export const verifyOTP = async ({otp, email}:{otp: string; email: string;}): Pro
     if(!token) {
         throw new Error("Something went wrong");
     }
-
-    console.log("USER EMAIL", email);
-    console.log("[REFRESH TOKEN]", token)
 
     const res = await fetch(`${URL}/auth/verify-otp`, {
       method: "POST",
@@ -93,7 +90,7 @@ export const resendOTP = async(email: string) => {
 
     const res = await data.json()
 
-    console.log(res)
+    return res
 
 
 }
@@ -115,8 +112,6 @@ export const login = async (user: LoginCredentials): Promise<LoginResponse> => {
     })
 
     const rawJson = await res.json();
-
-    console.log("[RAW LOGIN]", rawJson)
     
 
     const result = loginAuthResponseSchema.parse(rawJson)
@@ -139,7 +134,6 @@ export const onboardingRegistration = async(onboardingInfo: {
     const localToken = getToken()
 
     const token = localToken?.token
-    console.log("[TOKEN]", token)
 
      if(!token) {
         throw new Error("Something went wrong");
@@ -151,7 +145,6 @@ export const onboardingRegistration = async(onboardingInfo: {
         data: onboardingInfo.data
     }
 
-    console.log(reqData)
     
     const res = await fetch(`${URL}/auth/onboarding-step`, {
         method: "PATCH",
@@ -181,7 +174,6 @@ export const loginWithGoogle = async (credential: string) => {
 
     const rawJson = await res.json();
 
-    console.log(rawJson)
 
     return rawJson
 
@@ -357,10 +349,6 @@ export const logout = async({refreshToken}: {refreshToken: string}) => {
 
 
     const rawJson = await res.json();
-
-    console.log("Logout", rawJson)
-
-    clearAuth();
 
     return rawJson
 
