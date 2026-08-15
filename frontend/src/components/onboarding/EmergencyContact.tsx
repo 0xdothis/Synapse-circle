@@ -17,7 +17,7 @@ const items = [
   { label: "Select Relationship", value: null },
   { label: "Parent", value: "parent" },
   { label: "Friend", value: "friend" },
-  { label: "Roommate", value: "roommatr" },
+  { label: "Roommate", value: "roommate" },
   { label: "Partner", value: "partner" },
   { label: "Other", value: "other" }
 ]
