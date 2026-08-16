@@ -75,6 +75,7 @@ export default function Profile() {
 
   console.log("[PROFILE]", profile)
 
+
   const numOfContacts = profile.trustedContacts.length;
 
   console.log(profile.profilePicture)

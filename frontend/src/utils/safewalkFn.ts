@@ -321,6 +321,8 @@ export const userProfile = async () => {
 
     const rawJson = await res.json();
 
+    console.log("[USER FUNCTION]", rawJson)
+
 
     return rawJson
 
