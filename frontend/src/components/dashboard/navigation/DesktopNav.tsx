@@ -66,6 +66,8 @@ function DesktopNav() {
 
   const { profile } = data
 
+  console.log("[DESKTOP NAV]", profile)
+
 
 
 

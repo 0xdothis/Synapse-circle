@@ -73,6 +73,8 @@ export default function Profile() {
 
   }
 
+  console.log("[PROFILE]", profile)
+
   const numOfContacts = profile.trustedContacts.length;
 
   console.log(profile.profilePicture)
@@ -91,7 +93,7 @@ export default function Profile() {
             <div className="flex items-center gap-3">
               <div className="size-10 bg-brand-200 rounded-full flex aspect-video overflow-hidden justify-center items-center">
 
-                {profile.profilePicture ? <img src={`${profile.profilePicture}`}
+                {profile?.profilePicture ? <img src={`${profile.profilePicture}`}
                   alt="user profile pictures" className="w-full object cover h-full" /> : <p className="font-bold text-brand-500">{profile.name && getInitials(profile.name!)}</p>}
               </div>
 
