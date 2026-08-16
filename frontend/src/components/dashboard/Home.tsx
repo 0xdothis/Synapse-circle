@@ -50,7 +50,6 @@ function Home() {
     return null;
   }
 
-  const { profile } = data
 
 
   const { mutate } = useMutation({
@@ -101,13 +100,14 @@ function Home() {
   }
 
 
+  const { profile } = data
 
 
 
 
   return (
     <section className="relative pt-4 pb-16">
-      <Header title={profile.university} caption={greeting} name={profile.name} imageUrl={profile.profilePicture}
+      <Header title={profile.university} caption={greeting} name={profile.name} imageUrl={profile?.profilePicture}
       />
       <div className="mt-22 scroll-mt-20 mb-5">
         <div>
