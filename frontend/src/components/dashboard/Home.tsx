@@ -15,6 +15,7 @@ import React from "react"
 import { clearAuth } from "@/lib/authStorage"
 import type { ContactDTO } from "@/types"
 import { useAlertStore } from "@/store/useAlertStore"
+import HomeEmpty from "./HomeEmpty"
 
 
 
@@ -40,6 +41,7 @@ function Home() {
 
         toast.error(data.message)
         clearAuth()
+        navigate(0)
       }
     }
 
@@ -102,12 +104,23 @@ function Home() {
 
   const { profile } = data
 
+  if (!profile) {
+    return;
+  }
+
+  const { isComplete } = profile.safetySetup
+
+
+  if (!isComplete) {
+    return <HomeEmpty />
+  }
+
 
 
 
   return (
     <section className="relative pt-4 pb-16">
-      <Header title={profile.university} caption={greeting} name={profile.name} imageUrl={profile?.profilePicture}
+      <Header title={profile.university} caption={greeting} name={profile.name} imageUrl={profile.profilePicture}
       />
       <div className="mt-22 scroll-mt-20 mb-5">
         <div>
