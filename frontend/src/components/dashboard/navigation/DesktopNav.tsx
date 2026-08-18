@@ -25,8 +25,6 @@ function DesktopNav() {
     queryFn: userProfile
   })
 
-  console.log("[USER DATA]", data)
-
   const { mutate: userLogout } = useMutation({
     mutationFn: logout,
     onSuccess: (data) => {
@@ -71,10 +69,6 @@ function DesktopNav() {
   if (!profile) {
     return null
   }
-
-  console.log("[DESKTOP NAV]", profile)
-
-
 
 
 
